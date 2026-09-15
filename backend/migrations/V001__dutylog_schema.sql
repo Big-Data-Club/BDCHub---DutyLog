@@ -7,9 +7,10 @@
 -- ── Organizations (logical tenant mapping from auth service) ──
 CREATE TABLE IF NOT EXISTS organizations (
     id          BIGINT PRIMARY KEY,
-    code        VARCHAR(64) UNIQUE NOT NULL,
+    slug        VARCHAR(64) UNIQUE NOT NULL,
     name        VARCHAR(255) NOT NULL,
     description TEXT,
+    is_active   BOOLEAN NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

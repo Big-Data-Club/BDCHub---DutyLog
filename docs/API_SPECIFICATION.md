@@ -167,6 +167,27 @@ Authentication: Bearer JWT Token issued by BDC Hub Auth Service.
 }
 ```
 
+#### 6. Synchronize Organizations from Auth Service
+* Method: `POST`
+* Path: `/sync/organizations`
+* Description: Triggers immediate pull synchronization of active organizations from BDC Hub Auth Service.
+* Response: `200 OK`
+```json
+{
+  "message": "Organizations successfully synchronized from Auth Service",
+  "synced_count": 3,
+  "organizations": [
+    {
+      "id": 1,
+      "name": "Big Data Club",
+      "slug": "bdc",
+      "description": "Default organization",
+      "is_active": true
+    }
+  ]
+}
+```
+
 ---
 
 ## 2. Apache Kafka Event Contract

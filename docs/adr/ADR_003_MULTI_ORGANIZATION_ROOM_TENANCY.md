@@ -34,6 +34,8 @@ The BDC Dev Team adopts an organization scoped logical multi tenancy model:
    * Administrative modifications (such as updating room capacity or configuring duty shifts) require administrative role verification within the target organization.
 3. Decoupled Service Boundary:
    * In compliance with BDC Hub core architecture rules, DutyLog does not access the authentication database directly. User profile synchronization and organization validation occur through authenticated HTTP APIs or event payloads.
+4. Dynamic Organization Replication:
+   * Organizations are strictly prohibited from being statically seeded in SQL migration files. The DutyLog service utilizes `OrgSyncService` to replicate active organizations from the Auth Service endpoint `/api/organizations` during boot time, on a 5 minute periodic ticker, and via an administrative sync webhook.
 
 ---
 
@@ -46,6 +48,10 @@ The BDC Dev Team adopts an organization scoped logical multi tenancy model:
 ### Alternative 2: Separate Database per Organization (Physical Isolation)
 * Approach: Spin up isolated database schemas or individual PostgreSQL instances per club.
 * Rejection Rationale: Excessive operational overhead and resource consumption for student club usage volumes. Logical row level partitioning provides complete security and isolation at fractional operational complexity.
+
+### Alternative 3: Static SQL Migration Seed for Organizations
+* Approach: Insert initial organization rows into migration files with fixed identifiers.
+* Rejection Rationale: Introduces severe desynchronization risk against the central Auth Service which serves as the authoritative single source of truth for organization identities and membership. Arbitrary seed IDs can conflict with real production entities.
 
 ---
 

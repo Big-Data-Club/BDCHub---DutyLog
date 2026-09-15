@@ -144,3 +144,29 @@ Every entry and exit emits an immutable domain event to Apache Kafka topic `duty
 4. Offline Reconciliation Worker:
    * Handles replayed scan batches uploaded after network reconnection.
    * Resolves duplicate entries using event timestamps and sequence validation.
+
+---
+
+## 5. Organization Synchronization Subsystem
+
+To maintain strict source of truth principles without violating database isolation boundaries, organizations are never statically hardcoded in database seed files. Instead, DutyLog maintains a local replicated cache synchronized directly from the Auth Service (`auth-and-management-service`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Auth as Auth Service (Source of Truth)
+    participant Sync as DutyLog OrgSync Worker
+    participant DB as DutyLog PostgreSQL Database
+
+    Note over Sync: Service Boot or Periodic 5min Ticker
+    Sync->>Auth: GET /api/organizations
+    Auth-->>Sync: Return List of OrgResponse JSON
+    Sync->>DB: Upsert organizations table (id, slug, name, is_active)
+    Sync->>DB: Bind rooms to authenticated BDC organization ID
+```
+
+Key principles:
+* Single Source of Truth: All organization records originate in `auth-and-management-service`.
+* Boot Time Synchronization: Upon service startup, `OrgSyncService` polls the central Auth Service and writes the latest records to PostgreSQL.
+* Periodic Refresh: A background ticker runs every 5 minutes to detect changes in organization metadata, descriptions, or active states.
+* Webhook Sync Endpoint: Exposes `POST /api/v1/sync/organizations` to allow Auth Service or platform administrators to trigger instantaneous synchronization whenever new organizations register.
