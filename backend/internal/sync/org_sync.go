@@ -8,8 +8,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/model"
 )
 
 type AuthOrgResponse struct {
