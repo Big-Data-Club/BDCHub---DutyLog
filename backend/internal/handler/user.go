@@ -48,13 +48,14 @@ func HandleGetUserOrganizations(db *sql.DB) gin.HandlerFunc {
 		if adminBool {
 			// Super Admin / Admin: access to all organizations
 			rows, err := db.QueryContext(ctx, `
-				SELECT o.id, o.slug, o.name, COALESCE(o.description, ''), 'ADMIN' AS org_role, COUNT(r.id) AS room_count
+				SELECT o.id, o.slug, o.name, COALESCE(o.description, ''), COALESCE(m.org_role, 'ADMIN') AS org_role, COUNT(r.id) AS room_count
 				FROM organizations o
+				LEFT JOIN organization_members m ON o.id = m.organization_id AND (m.user_id = $1 OR ($2 <> '' AND LOWER(m.email) = LOWER($2)))
 				LEFT JOIN rooms r ON r.organization_id = o.id AND r.is_active = true
 				WHERE o.is_active = true
-				GROUP BY o.id, o.slug, o.name, o.description
+				GROUP BY o.id, o.slug, o.name, o.description, m.org_role
 				ORDER BY o.id ASC
-			`)
+			`, uid, email)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return

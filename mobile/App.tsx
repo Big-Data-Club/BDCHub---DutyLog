@@ -6,9 +6,8 @@ import { fetchRooms, fetchUserOrganizations, setCurrentUser } from "./src/api/cl
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { OrgSelectionScreen } from "./src/screens/OrgSelectionScreen";
 import { RoomSelectionScreen } from "./src/screens/RoomSelectionScreen";
-import { DutyRoomActionsScreen } from "./src/screens/DutyRoomActionsScreen";
+import { DutyStationScreen } from "./src/screens/DutyStationScreen";
 import { ScanCheckinScreen } from "./src/screens/ScanCheckinScreen";
-import { LiveRosterScreen } from "./src/screens/LiveRosterScreen";
 import { QRDisplayScreen } from "./src/screens/QRDisplayScreen";
 import { AdminInspectionScreen } from "./src/screens/AdminInspectionScreen";
 
@@ -16,9 +15,8 @@ type Screen =
   | "LOGIN"
   | "ORG_SELECT"
   | "ROOMS"
-  | "ROOM_ACTIONS"
+  | "DUTY_STATION"
   | "SCAN"
-  | "ROSTER"
   | "QR_DISPLAY"
   | "ADMIN_INSPECTION";
 
@@ -29,6 +27,7 @@ export default function App() {
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [scannerMode, setScannerMode] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
   const [loading, setLoading] = useState(false);
 
   const handleLoginSuccess = async (user: User) => {
@@ -38,20 +37,8 @@ export default function App() {
       const orgsData = await fetchUserOrganizations();
       const orgList = orgsData.organizations || [];
       setOrganizations(orgList);
-
-      // Organization Selection Rule:
-      // - Belongs to 1 Org: Automatically navigate into that Org.
-      // - Belongs to multiple Orgs: Select an Org manually.
-      if (orgList.length === 1 && !user.is_super_admin) {
-        const singleOrg = orgList[0];
-        setSelectedOrg(singleOrg);
-        const roomList = await fetchRooms(singleOrg.id);
-        setRooms(roomList);
-        setCurrentScreen("ROOMS");
-      } else {
-        // Multi-Org or Super Admin: show Org Selection screen
-        setCurrentScreen("ORG_SELECT");
-      }
+      // All users go through the initial flow: Login -> Org Selection -> Room Selection -> Duty Station
+      setCurrentScreen("ORG_SELECT");
     } catch (e) {
       console.warn("Failed to load user organizations:", e);
       setCurrentScreen("ORG_SELECT");
@@ -77,7 +64,7 @@ export default function App() {
 
   const handleSelectRoom = (room: Room) => {
     setSelectedRoom(room);
-    setCurrentScreen("ROOM_ACTIONS");
+    setCurrentScreen("DUTY_STATION");
   };
 
   const reloadRooms = async () => {
@@ -107,7 +94,7 @@ export default function App() {
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#00F0FF" />
         </View>
       )}
 
@@ -116,13 +103,14 @@ export default function App() {
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
       )}
 
-      {/* 2. Organization Selection Screen (Multi-org or Super Admin) */}
+      {/* 2. Organization Selection Screen (Displays role: OWNER, ADMIN, MEMBER, SUPER ADMIN) */}
       {currentScreen === "ORG_SELECT" && currentUserState && (
         <OrgSelectionScreen
           user={currentUserState}
           organizations={organizations}
           onSelectOrg={handleSelectOrg}
           onLogout={handleLogout}
+          onNavigateToInspection={() => setCurrentScreen("ADMIN_INSPECTION")}
         />
       )}
 
@@ -134,35 +122,40 @@ export default function App() {
           rooms={rooms}
           selectedRoom={selectedRoom}
           onSelectRoom={handleSelectRoom}
-          canChangeOrg={organizations.length > 1 || currentUserState.is_super_admin}
-          onChangeOrg={() => setCurrentScreen("ORG_SELECT")}
+          onBackToOrg={() => setCurrentScreen("ORG_SELECT")}
           onNavigateToInspection={() => setCurrentScreen("ADMIN_INSPECTION")}
           onLogout={handleLogout}
         />
       )}
 
-      {/* 4. Duty Room Actions Screen (On-Duty Operations & QR Option) */}
-      {currentScreen === "ROOM_ACTIONS" && currentUserState && selectedRoom && (
-        <DutyRoomActionsScreen
+      {/* 4. Duty Station Screen (High-tech Banking UI, Hero Scan, History, Live Roster, Shifts) */}
+      {currentScreen === "DUTY_STATION" && currentUserState && selectedOrg && selectedRoom && (
+        <DutyStationScreen
           user={currentUserState}
+          organization={selectedOrg}
           room={selectedRoom}
-          onBack={() => {
+          onBackToRooms={() => {
             reloadRooms();
             setCurrentScreen("ROOMS");
           }}
-          onNavigateToScan={() => setCurrentScreen("SCAN")}
-          onNavigateToQR={() => setCurrentScreen("QR_DISPLAY")}
-          onNavigateToRoster={() => setCurrentScreen("ROSTER")}
+          onOpenScanner={(mode) => {
+            setScannerMode(mode);
+            setCurrentScreen("SCAN");
+          }}
+          onOpenPersonalQR={() => setCurrentScreen("QR_DISPLAY")}
+          onLogout={handleLogout}
+          onNavigateToInspection={() => setCurrentScreen("ADMIN_INSPECTION")}
         />
       )}
 
-      {/* 5. On-Duty Operations: Scanner Screen (with RED Invalid Access Alert) */}
+      {/* 5. Scanner Screen (Barcode or QR scan with HUD, manual entry, RED invalid member alert) */}
       {currentScreen === "SCAN" && selectedRoom && (
         <ScanCheckinScreen
           room={selectedRoom}
+          initialMode={scannerMode}
           onBack={() => {
             reloadRooms();
-            setCurrentScreen("ROOM_ACTIONS");
+            setCurrentScreen("DUTY_STATION");
           }}
           onSuccess={() => {
             reloadRooms();
@@ -170,33 +163,30 @@ export default function App() {
         />
       )}
 
-      {/* 6. Standalone Check-in QR Code Screen */}
+      {/* 6. Standalone Personal Check-in QR Code Screen (Rotating 10s HMAC token) */}
       {currentScreen === "QR_DISPLAY" && selectedRoom && (
         <QRDisplayScreen
+          user={currentUserState || undefined}
           room={selectedRoom}
           onBack={() => {
             reloadRooms();
-            setCurrentScreen("ROOM_ACTIONS");
+            setCurrentScreen("DUTY_STATION");
           }}
         />
       )}
 
-      {/* 7. Live Room Occupants Roster Screen */}
-      {currentScreen === "ROSTER" && selectedRoom && (
-        <LiveRosterScreen
-          room={selectedRoom}
-          onBack={() => {
-            reloadRooms();
-            setCurrentScreen("ROOM_ACTIONS");
-          }}
-          onOpenScanner={() => setCurrentScreen("SCAN")}
-        />
-      )}
-
-      {/* 8. Super Admin Flow: Bottom-Up System Inspection */}
+      {/* 7. Super Admin Flow: Bottom-Up System Inspection */}
       {currentScreen === "ADMIN_INSPECTION" && (
         <AdminInspectionScreen
-          onBack={() => setCurrentScreen("ROOMS")}
+          onBack={() => {
+            if (selectedRoom) {
+              setCurrentScreen("DUTY_STATION");
+            } else if (selectedOrg) {
+              setCurrentScreen("ROOMS");
+            } else {
+              setCurrentScreen("ORG_SELECT");
+            }
+          }}
         />
       )}
     </View>
@@ -206,11 +196,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#070B14",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    backgroundColor: "rgba(7, 11, 20, 0.75)",
     zIndex: 99,
     justifyContent: "center",
     alignItems: "center",
