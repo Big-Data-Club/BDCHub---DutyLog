@@ -9,6 +9,46 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+func normalizeRole(role string) string {
+	r := strings.ToUpper(strings.TrimSpace(role))
+	r = strings.TrimPrefix(r, "ROLE_")
+	return r
+}
+
+func hasAdminRole(claims jwt.MapClaims) bool {
+	// 1. Check singular "role" claim
+	if r, ok := claims["role"].(string); ok {
+		norm := normalizeRole(r)
+		if norm == "ADMIN" || norm == "MANAGER" {
+			return true
+		}
+	}
+
+	// 2. Check "roles" slice claim ([]interface{} from jwt.MapClaims)
+	if rolesRaw, ok := claims["roles"].([]interface{}); ok {
+		for _, item := range rolesRaw {
+			if str, ok := item.(string); ok {
+				norm := normalizeRole(str)
+				if norm == "ADMIN" || norm == "MANAGER" {
+					return true
+				}
+			}
+		}
+	}
+
+	// 3. Check "roles" slice claim if []string
+	if rolesStr, ok := claims["roles"].([]string); ok {
+		for _, str := range rolesStr {
+			norm := normalizeRole(str)
+			if norm == "ADMIN" || norm == "MANAGER" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // RequireAdminJWT validates a BDC Hub JWT and enforces role=ADMIN.
 // The token secret is read from the JWT_SECRET environment variable.
 func RequireAdminJWT() gin.HandlerFunc {
@@ -35,8 +75,7 @@ func RequireAdminJWT() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "malformed claims"})
 			return
 		}
-		role, _ := claims["role"].(string)
-		if role != "ADMIN" {
+		if !hasAdminRole(claims) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin role required"})
 			return
 		}
