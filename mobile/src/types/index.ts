@@ -35,3 +35,8 @@ export interface CheckOutResult {
   duration_seconds: number;
   current_room_occupancy: number;
 }
+
+export interface QRToken {
+  payload: string;
+  expires_at: string; // ISO string
+}

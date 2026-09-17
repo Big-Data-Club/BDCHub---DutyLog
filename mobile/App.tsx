@@ -6,8 +6,9 @@ import { fetchRooms } from "./src/api/client";
 import { RoomSelectionScreen } from "./src/screens/RoomSelectionScreen";
 import { ScanCheckinScreen } from "./src/screens/ScanCheckinScreen";
 import { LiveRosterScreen } from "./src/screens/LiveRosterScreen";
+import { QRDisplayScreen } from "./src/screens/QRDisplayScreen";
 
-type Screen = "ROOMS" | "SCAN" | "ROSTER";
+type Screen = "ROOMS" | "SCAN" | "ROSTER" | "QR_DISPLAY";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("ROOMS");
@@ -37,6 +38,7 @@ export default function App() {
           onSelectRoom={setSelectedRoom}
           onNavigateToScan={() => setCurrentScreen("SCAN")}
           onNavigateToRoster={() => setCurrentScreen("ROSTER")}
+          onNavigateToQR={() => setCurrentScreen("QR_DISPLAY")}
         />
       )}
 
@@ -61,6 +63,16 @@ export default function App() {
             setCurrentScreen("ROOMS");
           }}
           onOpenScanner={() => setCurrentScreen("SCAN")}
+        />
+      )}
+
+      {currentScreen === "QR_DISPLAY" && selectedRoom && (
+        <QRDisplayScreen
+          room={selectedRoom}
+          onBack={() => {
+            loadRooms();
+            setCurrentScreen("ROOMS");
+          }}
         />
       )}
     </View>

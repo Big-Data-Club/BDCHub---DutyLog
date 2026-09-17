@@ -8,6 +8,7 @@ interface Props {
   onSelectRoom: (room: Room) => void;
   onNavigateToScan: () => void;
   onNavigateToRoster: () => void;
+  onNavigateToQR: () => void;
 }
 
 export const RoomSelectionScreen: React.FC<Props> = ({
@@ -16,6 +17,7 @@ export const RoomSelectionScreen: React.FC<Props> = ({
   onSelectRoom,
   onNavigateToScan,
   onNavigateToRoster,
+  onNavigateToQR,
 }) => {
   return (
     <SafeAreaView style={styles.container}>
@@ -67,6 +69,12 @@ export const RoomSelectionScreen: React.FC<Props> = ({
               <Text style={styles.buttonSecondaryText}>View Presence</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary]}
+              onPress={onNavigateToQR}
+            >
+              <Text style={styles.buttonSecondaryText}>Tạo QR</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.button, styles.buttonPrimary]}
               onPress={onNavigateToScan}
             >
@@ -78,6 +86,7 @@ export const RoomSelectionScreen: React.FC<Props> = ({
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

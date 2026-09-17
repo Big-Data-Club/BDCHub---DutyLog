@@ -89,3 +89,35 @@ export async function fetchOccupancy(roomId: string): Promise<Occupant[]> {
   const data = await res.json();
   return data.occupants || [];
 }
+
+export async function generateQRToken(
+  studentId: string,
+  studentName: string
+): Promise<{ payload: string; expires_at: string }> {
+  const res = await fetch(`${BASE_URL}/qr/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_id: studentId, student_name: studentName }),
+  });
+  if (!res.ok) throw new Error(`QR generate failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function performQRCheckin(
+  roomId: string,
+  payload: string
+): Promise<CheckInResult> {
+  const res = await fetch(`${BASE_URL}/rooms/${roomId}/checkin-qr`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      payload,
+      client_timestamp: new Date().toISOString(),
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `QR checkin failed: HTTP ${res.status}`);
+  }
+  return res.json();
+}

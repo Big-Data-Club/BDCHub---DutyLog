@@ -16,6 +16,7 @@ type Room struct {
 
 type CheckInRequest struct {
 	StudentID       string    `json:"student_id" binding:"required"`
+	StudentName     string    `json:"student_name"`
 	Method          string    `json:"method"`
 	ClientTimestamp time.Time `json:"client_timestamp"`
 }

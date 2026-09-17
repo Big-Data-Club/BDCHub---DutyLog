@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { BarCodeScanner } from "expo-barcode-scanner";
 import { Room, CheckInResult, CheckOutResult } from "../types";
-import { performCheckIn, performCheckOut } from "../api/client";
+import { performCheckIn, performCheckOut, performQRCheckin } from "../api/client";
 
 interface Props {
   room: Room;
@@ -19,10 +20,57 @@ interface Props {
 
 export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) => {
   const [scanMode, setScanMode] = useState<"CHECK_IN" | "CHECK_OUT">("CHECK_IN");
+  const [cameraMode, setCameraMode] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
   const [manualInput, setManualInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  const handleBarcodeScan = ({ type, data }: { type: string; data: string }) => {
+    if (scanning) return; // debounce
+    setScanning(true);
+    setTimeout(() => setScanning(false), 2000); // 2s cooldown
+    
+    // Detect if it's a QR token payload (has . separator) or regular barcode
+    if (data.includes(".") && data.split(".").length === 2) {
+      // QR mode: call checkin-qr
+      handleQRSubmit(data);
+    } else {
+      // Barcode mode: call regular checkin with student_id=data
+      handleScanOrSubmit(data);
+    }
+  };
+
+  const handleQRSubmit = async (payload: string) => {
+    setLoading(true);
+    setErrorMsg(null);
+    setLastResult(null);
+
+    try {
+      if (scanMode === "CHECK_IN") {
+        const result = await performQRCheckin(room.id, payload);
+        setLastResult(`QR Checked In: ${result.student_name} (${result.student_id})`);
+        setManualInput("");
+        onSuccess();
+      } else {
+        setErrorMsg("QR check-out is not supported yet.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to process QR scan");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleScanOrSubmit = async (studentIdToProcess?: string) => {
     const targetId = studentIdToProcess || manualInput.trim();
@@ -90,11 +138,45 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
         </TouchableOpacity>
       </View>
 
-      {/* Viewfinder Mock / Camera Target */}
+      <View style={styles.modeToggle}>
+        <TouchableOpacity
+          style={[styles.modeButton, cameraMode === "BARCODE" && styles.modeButtonActiveCheckIn]}
+          onPress={() => setCameraMode("BARCODE")}
+        >
+          <Text style={[styles.modeButtonText, cameraMode === "BARCODE" && styles.modeButtonTextActive]}>
+            Barcode Mode
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeButton, cameraMode === "QR_SCAN" && styles.modeButtonActiveCheckIn]}
+          onPress={() => setCameraMode("QR_SCAN")}
+        >
+          <Text style={[styles.modeButtonText, cameraMode === "QR_SCAN" && styles.modeButtonTextActive]}>
+            QR Mode
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Camera Viewfinder */}
       <View style={styles.scannerViewport}>
+        {hasPermission === null ? (
+          <Text style={styles.scannerPrompt}>Requesting camera permission...</Text>
+        ) : hasPermission === false ? (
+          <Text style={styles.scannerPrompt}>No access to camera</Text>
+        ) : (
+          <BarCodeScanner
+            onBarCodeScanned={scanning ? undefined : handleBarcodeScan}
+            style={StyleSheet.absoluteFillObject}
+            barCodeTypes={
+              cameraMode === "BARCODE" 
+                ? [BarCodeScanner.Constants.BarCodeType.code128, BarCodeScanner.Constants.BarCodeType.code39, BarCodeScanner.Constants.BarCodeType.ean13] 
+                : [BarCodeScanner.Constants.BarCodeType.qr]
+            }
+          />
+        )}
         <View style={styles.crosshairBox}>
           <Text style={styles.scannerPrompt}>
-            Align student card barcode inside this frame
+            {cameraMode === "BARCODE" ? "Align student card barcode inside this frame" : "Align student QR code inside this frame"}
           </Text>
         </View>
       </View>
@@ -203,6 +285,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
   },
   crosshairBox: {
     width: 260,
@@ -214,6 +297,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 12,
+    zIndex: 10,
   },
   scannerPrompt: {
     color: "#BAE6FD",
