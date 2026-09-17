@@ -19,6 +19,8 @@ type CheckInRequest struct {
 	StudentName     string    `json:"student_name"`
 	Method          string    `json:"method"`
 	ClientTimestamp time.Time `json:"client_timestamp"`
+	ScannerID       string    `json:"scanner_id"`
+	ScannerName     string    `json:"scanner_name"`
 }
 
 type CheckOutRequest struct {
@@ -36,6 +38,11 @@ type CheckInResponse struct {
 	CheckInAt            time.Time `json:"check_in_at"`
 	IsOnDuty             bool      `json:"is_on_duty"`
 	CurrentRoomOccupancy int       `json:"current_room_occupancy"`
+	IsValidMember        bool      `json:"is_valid_member"`
+	AlertColor           string    `json:"alert_color"` // "GREEN" or "RED"
+	AlertMessage         string    `json:"alert_message"`
+	ScannerID            string    `json:"scanner_id,omitempty"`
+	ScannerName          string    `json:"scanner_name,omitempty"`
 }
 
 type CheckOutResponse struct {
@@ -48,16 +55,67 @@ type CheckOutResponse struct {
 }
 
 type RoomOccupant struct {
-	StudentID   string    `json:"student_id"`
-	StudentName string    `json:"student_name"`
-	CheckInAt   time.Time `json:"check_in_at"`
-	IsOnDuty    bool      `json:"is_on_duty"`
+	StudentID     string    `json:"student_id"`
+	StudentName   string    `json:"student_name"`
+	CheckInAt     time.Time `json:"check_in_at"`
+	IsOnDuty      bool      `json:"is_on_duty"`
+	IsValidMember bool      `json:"is_valid_member"`
 }
 
 type RoomOccupancyResponse struct {
 	RoomID         string         `json:"room_id"`
 	OccupancyCount int            `json:"occupancy_count"`
 	Occupants      []RoomOccupant `json:"occupants"`
+}
+
+type DutyShiftRecord struct {
+	ID              int64      `json:"id"`
+	OrganizationID  int64      `json:"organization_id"`
+	RoomID          string     `json:"room_id"`
+	DutyStaffID     string     `json:"duty_staff_id"`
+	DutyStaffName   string     `json:"duty_staff_name"`
+	DutyStaffEmail  string     `json:"duty_staff_email"`
+	StartTime       time.Time  `json:"start_time"`
+	EndTime         *time.Time `json:"end_time"`
+	Status          string     `json:"status"` // 'ACTIVE', 'COMPLETED'
+	DurationSeconds int64      `json:"duration_seconds"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type StartShiftRequest struct {
+	DutyStaffID    string `json:"duty_staff_id"`
+	DutyStaffName  string `json:"duty_staff_name"`
+	DutyStaffEmail string `json:"duty_staff_email"`
+}
+
+type EndShiftRequest struct {
+	DutyStaffID string `json:"duty_staff_id"`
+}
+
+type PresenceHistoryItem struct {
+	ID              int64      `json:"id"`
+	OrganizationID  int64      `json:"organization_id"`
+	RoomID          string     `json:"room_id"`
+	StudentID       string     `json:"student_id"`
+	StudentName     string     `json:"student_name"`
+	CheckInAt       time.Time  `json:"check_in_at"`
+	CheckOutAt      *time.Time `json:"check_out_at"`
+	DurationSeconds *int64     `json:"duration_seconds"`
+	ScanMethod      string     `json:"scan_method"`
+	IsOnDuty        bool       `json:"is_on_duty"`
+	ScannerID       string     `json:"scanner_id"`
+	ScannerName     string     `json:"scanner_name"`
+	IsValidMember   bool       `json:"is_valid_member"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type InspectionOrgItem struct {
+	ID          int64   `json:"id"`
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	IsActive    bool    `json:"is_active"`
+	Rooms       []Room  `json:"rooms"`
 }
 
 type KafkaPresenceEvent struct {
@@ -71,4 +129,7 @@ type KafkaPresenceEvent struct {
 	DutyAssigned    bool       `json:"duty_assigned"`
 	Timestamp       time.Time  `json:"timestamp"`
 	DurationSeconds *int64     `json:"duration_seconds,omitempty"`
+	ScannerID       string     `json:"scanner_id,omitempty"`
+	ScannerName     string     `json:"scanner_name,omitempty"`
+	IsValidMember   bool       `json:"is_valid_member"`
 }

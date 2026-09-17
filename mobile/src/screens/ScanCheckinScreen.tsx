@@ -24,6 +24,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
   const [manualInput, setManualInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [isInvalidMember, setIsInvalidMember] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -43,10 +44,8 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
     
     // Detect if it's a QR token payload (has . separator) or regular barcode
     if (data.includes(".") && data.split(".").length === 2) {
-      // QR mode: call checkin-qr
       handleQRSubmit(data);
     } else {
-      // Barcode mode: call regular checkin with student_id=data
       handleScanOrSubmit(data);
     }
   };
@@ -55,11 +54,18 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
     setLoading(true);
     setErrorMsg(null);
     setLastResult(null);
+    setIsInvalidMember(false);
 
     try {
       if (scanMode === "CHECK_IN") {
         const result = await performQRCheckin(room.id, payload);
-        setLastResult(`QR Checked In: ${result.student_name} (${result.student_id})`);
+        if (!result.is_valid_member) {
+          setIsInvalidMember(true);
+          setLastResult(`🚨 CẢNH BÁO TRUY CẬP: Sinh viên ${result.student_name} (${result.student_id}) KHÔNG THUỘC TỔ CHỨC NÀY!`);
+        } else {
+          setIsInvalidMember(false);
+          setLastResult(`QR Checked In: ${result.student_name} (${result.student_id}) - Hợp lệ`);
+        }
         setManualInput("");
         onSuccess();
       } else {
@@ -79,15 +85,24 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
     setLoading(true);
     setErrorMsg(null);
     setLastResult(null);
+    setIsInvalidMember(false);
 
     try {
       if (scanMode === "CHECK_IN") {
         const result: CheckInResult = await performCheckIn(room.id, targetId);
-        setLastResult(`Checked In: ${result.student_name} (${result.student_id})`);
+        if (!result.is_valid_member) {
+          // RED ALERT on duty staff screen
+          setIsInvalidMember(true);
+          setLastResult(`🚨 CẢNH BÁO TRUY CẬP: Mã số ${result.student_id} KHÔNG THUỘC TỔ CHỨC!`);
+        } else {
+          setIsInvalidMember(false);
+          setLastResult(`Checked In: ${result.student_name} (${result.student_id}) - Hợp lệ`);
+        }
       } else {
         const result: CheckOutResult = await performCheckOut(room.id, targetId);
+        setIsInvalidMember(false);
         setLastResult(
-          `Checked Out: ${result.student_id} (Duration: ${Math.round(result.duration_seconds / 60)}m)`
+          `Checked Out: ${result.student_id} (Thời gian: ${Math.round(result.duration_seconds / 60)} phút)`
         );
       }
       setManualInput("");
@@ -100,13 +115,26 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isInvalidMember && styles.containerInvalidAlert]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Rooms</Text>
+          <Text style={styles.backButtonText}>← Quay lại</Text>
         </TouchableOpacity>
-        <Text style={styles.roomTitle}>{room.name}</Text>
+        <Text style={styles.roomTitle} numberOfLines={1}>{room.name}</Text>
       </View>
+
+      {/* Red Alert Banner Top (When Invalid Access Scanned) */}
+      {isInvalidMember && (
+        <View style={styles.topRedAlertBanner}>
+          <Text style={styles.topRedAlertIcon}>🚨</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.topRedAlertTitle}>CẢNH BÁO TRUY CẬP KHÔNG HỢP LỆ</Text>
+            <Text style={styles.topRedAlertDesc}>
+              Cá nhân vừa quét không phải là thành viên của tổ chức này!
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Mode Selector */}
       <View style={styles.modeToggle}>
@@ -120,7 +148,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
               scanMode === "CHECK_IN" && styles.modeButtonTextActive,
             ]}
           >
-            Check In
+            Check In (Vào phòng)
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -133,7 +161,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
               scanMode === "CHECK_OUT" && styles.modeButtonTextActive,
             ]}
           >
-            Check Out
+            Check Out (Rời phòng)
           </Text>
         </TouchableOpacity>
       </View>
@@ -144,7 +172,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
           onPress={() => setCameraMode("BARCODE")}
         >
           <Text style={[styles.modeButtonText, cameraMode === "BARCODE" && styles.modeButtonTextActive]}>
-            Barcode Mode
+            Quét mã vạch (Barcode)
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -152,17 +180,17 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
           onPress={() => setCameraMode("QR_SCAN")}
         >
           <Text style={[styles.modeButtonText, cameraMode === "QR_SCAN" && styles.modeButtonTextActive]}>
-            QR Mode
+            Quét mã QR
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Camera Viewfinder */}
-      <View style={styles.scannerViewport}>
+      <View style={[styles.scannerViewport, isInvalidMember && styles.viewportInvalid]}>
         {hasPermission === null ? (
-          <Text style={styles.scannerPrompt}>Requesting camera permission...</Text>
+          <Text style={styles.scannerPrompt}>Đang yêu cầu quyền camera...</Text>
         ) : hasPermission === false ? (
-          <Text style={styles.scannerPrompt}>No access to camera</Text>
+          <Text style={styles.scannerPrompt}>Không có quyền truy cập camera</Text>
         ) : (
           <BarCodeScanner
             onBarCodeScanned={scanning ? undefined : handleBarcodeScan}
@@ -174,20 +202,24 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
             }
           />
         )}
-        <View style={styles.crosshairBox}>
-          <Text style={styles.scannerPrompt}>
-            {cameraMode === "BARCODE" ? "Align student card barcode inside this frame" : "Align student QR code inside this frame"}
+        <View style={[styles.crosshairBox, isInvalidMember && styles.crosshairBoxInvalid]}>
+          <Text style={[styles.scannerPrompt, isInvalidMember && styles.scannerPromptInvalid]}>
+            {isInvalidMember
+              ? "CẢNH BÁO: KHÔNG THUỘC TỔ CHỨC"
+              : cameraMode === "BARCODE"
+              ? "Căn chỉnh mã vạch thẻ sinh viên vào khung"
+              : "Căn chỉnh mã QR sinh viên vào khung"}
           </Text>
         </View>
       </View>
 
-      {/* Manual Code Entry & Simulation */}
+      {/* Manual Code Entry & Result */}
       <View style={styles.bottomSheet}>
-        <Text style={styles.inputLabel}>Manual Barcode / Student ID</Text>
+        <Text style={styles.inputLabel}>Nhập mã vạch / MSSV thủ công:</Text>
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder="Scan or enter ID (for example 2112345)"
+            placeholder="VD: 2112345"
             placeholderTextColor="#94A3B8"
             value={manualInput}
             onChangeText={setManualInput}
@@ -202,14 +234,16 @@ export const ScanCheckinScreen: React.FC<Props> = ({ room, onBack, onSuccess }) 
             {loading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.submitButtonText}>Submit</Text>
+              <Text style={styles.submitButtonText}>Xác nhận</Text>
             )}
           </TouchableOpacity>
         </View>
 
         {lastResult && (
-          <View style={styles.successBanner}>
-            <Text style={styles.successText}>✓ {lastResult}</Text>
+          <View style={isInvalidMember ? styles.invalidAlertBanner : styles.successBanner}>
+            <Text style={isInvalidMember ? styles.invalidAlertText : styles.successText}>
+              {lastResult}
+            </Text>
           </View>
         )}
 
@@ -227,6 +261,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0F172A",
+  },
+  containerInvalidAlert: {
+    borderWidth: 4,
+    borderColor: "#DC2626",
   },
   header: {
     paddingHorizontal: 16,
@@ -252,13 +290,35 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     flex: 1,
   },
+  topRedAlertBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  topRedAlertIcon: {
+    fontSize: 24,
+  },
+  topRedAlertTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  topRedAlertDesc: {
+    color: "#FEE2E2",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   modeToggle: {
     flexDirection: "row",
     marginHorizontal: 16,
     backgroundColor: "#1E293B",
     borderRadius: 12,
     padding: 4,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   modeButton: {
     flex: 1,
@@ -270,10 +330,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB",
   },
   modeButtonActiveCheckOut: {
-    backgroundColor: "#DC2626",
+    backgroundColor: "#EA580C",
   },
   modeButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#94A3B8",
   },
@@ -287,6 +347,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     overflow: "hidden",
   },
+  viewportInvalid: {
+    backgroundColor: "rgba(220, 38, 38, 0.1)",
+  },
   crosshairBox: {
     width: 260,
     height: 150,
@@ -299,11 +362,20 @@ const styles = StyleSheet.create({
     padding: 12,
     zIndex: 10,
   },
+  crosshairBoxInvalid: {
+    borderColor: "#EF4444",
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    borderWidth: 3,
+  },
   scannerPrompt: {
     color: "#BAE6FD",
     fontSize: 12,
     textAlign: "center",
     fontWeight: "500",
+  },
+  scannerPromptInvalid: {
+    color: "#FCA5A5",
+    fontWeight: "800",
   },
   bottomSheet: {
     backgroundColor: "#1E293B",
@@ -350,17 +422,33 @@ const styles = StyleSheet.create({
   successBanner: {
     marginTop: 12,
     backgroundColor: "#064E3B",
-    borderRadius: 8,
-    padding: 10,
+    borderWidth: 1,
+    borderColor: "#059669",
+    borderRadius: 10,
+    padding: 12,
   },
   successText: {
     color: "#6EE7B7",
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+  invalidAlertBanner: {
+    marginTop: 12,
+    backgroundColor: "#7F1D1D",
+    borderWidth: 2,
+    borderColor: "#EF4444",
+    borderRadius: 10,
+    padding: 14,
+  },
+  invalidAlertText: {
+    color: "#FEE2E2",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
   },
   errorBanner: {
     marginTop: 12,
-    backgroundColor: "#7F1D1D",
+    backgroundColor: "#450A0A",
     borderRadius: 8,
     padding: 10,
   },

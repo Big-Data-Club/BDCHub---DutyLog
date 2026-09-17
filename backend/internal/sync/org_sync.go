@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,14 @@ type AuthOrgResponse struct {
 	Slug        string `json:"slug"`
 	Description string `json:"description"`
 	IsActive    bool   `json:"is_active"`
+}
+
+type AuthMemberResponse struct {
+	UserID      int64  `json:"user_id"`
+	FullName    string `json:"full_name"`
+	Email       string `json:"email"`
+	StudentCode string `json:"student_code"`
+	OrgRole     string `json:"org_role"`
 }
 
 type OrgSyncService struct {
@@ -34,8 +43,8 @@ func NewOrgSyncService(authBaseURL string, db *sql.DB) *OrgSyncService {
 	}
 }
 
-// SyncOrganizations fetches the source-of-truth organizations from auth-and-management-service
-// and upserts them into the local replicated organizations table.
+// SyncOrganizations fetches source-of-truth organizations and their members
+// from auth-and-management-service and upserts them into local replicated tables.
 func (s *OrgSyncService) SyncOrganizations(ctx context.Context) ([]AuthOrgResponse, error) {
 	reqURL := fmt.Sprintf("%s/api/organizations", s.authBaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -64,9 +73,100 @@ func (s *OrgSyncService) SyncOrganizations(ctx context.Context) ([]AuthOrgRespon
 		if err := s.persistOrganizations(ctx, orgs); err != nil {
 			return nil, fmt.Errorf("persist synchronized organizations: %w", err)
 		}
+
+		// Sync members for each organization
+		for _, org := range orgs {
+			if err := s.SyncMembers(ctx, org.ID); err != nil {
+				log.Printf("[ORG_SYNC] Warning: sync members for org %d (%s) failed: %v", org.ID, org.Name, err)
+			}
+		}
 	}
 
 	return orgs, nil
+}
+
+// SyncMembers fetches members of a specific organization from Auth Service and upserts them
+func (s *OrgSyncService) SyncMembers(ctx context.Context, orgID int64) error {
+	reqURL := fmt.Sprintf("%s/api/organizations/%d/members", s.authBaseURL, orgID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("create member request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call auth service %s: %w", reqURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("auth service returned HTTP %d for %s", resp.StatusCode, reqURL)
+	}
+
+	var members []AuthMemberResponse
+	if err := json.NewDecoder(resp.Body).Decode(&members); err != nil {
+		return fmt.Errorf("decode members response: %w", err)
+	}
+
+	query := `
+		INSERT INTO organization_members (organization_id, user_id, student_code, email, full_name, org_role, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		ON CONFLICT (organization_id, user_id) DO UPDATE
+		SET student_code = EXCLUDED.student_code,
+		    email        = EXCLUDED.email,
+		    full_name    = EXCLUDED.full_name,
+		    org_role     = EXCLUDED.org_role,
+		    updated_at   = NOW();
+	`
+
+	stmt, err := s.db.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("prepare member insert stmt: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, m := range members {
+		if _, err := stmt.ExecContext(ctx, orgID, m.UserID, m.StudentCode, m.Email, m.FullName, m.OrgRole); err != nil {
+			log.Printf("[ORG_SYNC] Failed to upsert member %d into org %d: %v", m.UserID, orgID, err)
+		}
+	}
+
+	log.Printf("[ORG_SYNC] Synced %d members for org %d", len(members), orgID)
+	return nil
+}
+
+// VerifyMembership checks whether an individual belongs to the specified organization.
+// It checks against the replicated organization_members table by student_code, user_id, or email.
+func (s *OrgSyncService) VerifyMembership(ctx context.Context, orgID int64, identifier string) (bool, string, string, error) {
+	if s.db == nil {
+		return true, "", "", nil
+	}
+
+	cleanID := strings.TrimSpace(identifier)
+	var fullName, email string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT full_name, email
+		FROM organization_members
+		WHERE organization_id = $1
+		  AND (student_code = $2 OR user_id::text = $2 OR LOWER(email) = LOWER($2))
+		LIMIT 1
+	`, orgID, cleanID).Scan(&fullName, &email)
+
+	if err == nil {
+		return true, fullName, email, nil
+	}
+
+	if err == sql.ErrNoRows {
+		// Non-blocking trigger to refresh members in background
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = s.SyncMembers(bgCtx, orgID)
+		}()
+		return false, "", "", nil
+	}
+
+	return false, "", "", err
 }
 
 // persistOrganizations writes the synced organizations into the database using an upsert transaction

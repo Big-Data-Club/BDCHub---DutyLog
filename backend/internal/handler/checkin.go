@@ -13,15 +13,17 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/model"
+	dutySync "github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/sync"
 )
 
 // performCheckinDB writes a presence log row and updates the Redis active sorted set.
-// It is called by both barcode and QR check-in paths.
+// It verifies whether the student belongs to the organization and logs scanner identity.
 func performCheckinDB(
 	ctx context.Context,
 	db *sql.DB,
 	rds *redis.Client,
-	roomID, studentID, studentName, scanMethod string,
+	syncService *dutySync.OrgSyncService,
+	roomID, studentID, studentName, scanMethod, scannerID, scannerName string,
 	now time.Time,
 ) (*model.CheckInResponse, error) {
 	// 1. Resolve organisation from room
@@ -37,7 +39,29 @@ func performCheckinDB(
 		return nil, fmt.Errorf("room lookup: %w", err)
 	}
 
-	// 2. Determine whether this student is on a scheduled duty shift right now
+	// 2. Verify Membership in current Organization
+	var isValidMember = true
+	var alertColor = "GREEN"
+	var alertMessage = "Xác nhận hợp lệ: Thành viên thuộc tổ chức"
+
+	if syncService != nil {
+		isMember, memberName, _, vErr := syncService.VerifyMembership(ctx, orgID, studentID)
+		if vErr != nil {
+			log.Printf("[CHECKIN] Membership verification check error: %v", vErr)
+		} else if !isMember {
+			isValidMember = false
+			alertColor = "RED"
+			alertMessage = fmt.Sprintf("CẢNH BÁO: Mã sinh viên %s KHÔNG thuộc tổ chức này!", studentID)
+		} else {
+			isValidMember = true
+			if memberName != "" && (studentName == "" || strings.HasPrefix(studentName, "Student ")) {
+				studentName = memberName
+			}
+			alertMessage = fmt.Sprintf("Xác nhận hợp lệ: %s thuộc tổ chức", studentName)
+		}
+	}
+
+	// 3. Determine whether this student is on a scheduled duty shift right now
 	var isOnDuty bool
 	weekday := int(now.Weekday())
 	if weekday == 0 {
@@ -60,29 +84,28 @@ func performCheckinDB(
 		isOnDuty = false
 	}
 
-	// 3. Insert presence log
+	// 4. Insert presence log with scanner identity and validity flag
 	var presenceID int64
 	err = db.QueryRowContext(ctx, `
 		INSERT INTO duty_presence_logs
-			(organization_id, room_id, student_id, student_name, check_in_at, scan_method, is_on_duty)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+			(organization_id, room_id, student_id, student_name, check_in_at, scan_method, is_on_duty, scanner_id, scanner_name, is_valid_member)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id
-	`, orgID, roomID, studentID, studentName, now, scanMethod, isOnDuty).Scan(&presenceID)
+	`, orgID, roomID, studentID, studentName, now, scanMethod, isOnDuty, scannerID, scannerName, isValidMember).Scan(&presenceID)
 	if err != nil {
 		return nil, fmt.Errorf("insert presence log: %w", err)
 	}
 
-	// 4. Add to Redis ZSET: dutylog:room:{room_id}:active
-	//    Member format: "{student_id}:{student_name}:{scan_method}"
-	//    Score: epoch milliseconds (enables timestamp ordering)
+	// 5. Add to Redis ZSET: dutylog:room:{room_id}:active
+	//    Member format: "{student_id}:{student_name}:{scan_method}:{is_valid_member}"
 	redisKey := fmt.Sprintf("dutylog:room:%s:active", roomID)
-	member := fmt.Sprintf("%s:%s:%s", studentID, studentName, scanMethod)
+	member := fmt.Sprintf("%s:%s:%s:%t", studentID, studentName, scanMethod, isValidMember)
 	rds.ZAdd(ctx, redisKey, redis.Z{
 		Score:  float64(now.UnixMilli()),
 		Member: member,
 	})
 
-	// 5. Live occupancy count
+	// 6. Live occupancy count
 	occupancy, _ := rds.ZCard(ctx, redisKey).Result()
 
 	return &model.CheckInResponse{
@@ -94,12 +117,17 @@ func performCheckinDB(
 		CheckInAt:            now,
 		IsOnDuty:             isOnDuty,
 		CurrentRoomOccupancy: int(occupancy),
+		IsValidMember:        isValidMember,
+		AlertColor:           alertColor,
+		AlertMessage:         alertMessage,
+		ScannerID:            scannerID,
+		ScannerName:          scannerName,
 	}, nil
 }
 
 // HandleCheckIn processes barcode / manual entry check-in.
 // POST /api/v1/rooms/:room_id/checkin
-func HandleCheckIn(db *sql.DB, rds *redis.Client) gin.HandlerFunc {
+func HandleCheckIn(db *sql.DB, rds *redis.Client, syncService *dutySync.OrgSyncService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID := c.Param("room_id")
 		var req model.CheckInRequest
@@ -107,6 +135,7 @@ func HandleCheckIn(db *sql.DB, rds *redis.Client) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
 		if req.StudentName == "" {
 			req.StudentName = "Student " + req.StudentID
 		}
@@ -114,15 +143,36 @@ func HandleCheckIn(db *sql.DB, rds *redis.Client) gin.HandlerFunc {
 		if scanMethod == "" {
 			scanMethod = "BARCODE"
 		}
+
+		// Resolve scanner identity: from request body or authenticated context
+		scannerID := req.ScannerID
+		scannerName := req.ScannerName
+		if scannerID == "" {
+			if uid, ok := c.Get("user_id"); ok {
+				scannerID = fmt.Sprintf("%v", uid)
+			}
+		}
+		if scannerName == "" {
+			if email, ok := c.Get("user_email"); ok {
+				scannerName = fmt.Sprintf("%v", email)
+			}
+			if scannerName == "" && scannerID != "" {
+				scannerName = "Staff " + scannerID
+			}
+		}
+
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 		defer cancel()
 
-		result, err := performCheckinDB(ctx, db, rds, roomID, req.StudentID, req.StudentName, scanMethod, time.Now().UTC())
+		result, err := performCheckinDB(ctx, db, rds, syncService, roomID, req.StudentID, req.StudentName, scanMethod, scannerID, scannerName, time.Now().UTC())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		log.Printf("[EVENT:dutylog.presence.v1] CHECK_IN student=%s room=%s method=%s", req.StudentID, roomID, scanMethod)
+
+		log.Printf("[EVENT:dutylog.presence.v1] CHECK_IN student=%s room=%s valid_member=%t scanner=%s",
+			req.StudentID, roomID, result.IsValidMember, scannerName)
+
 		c.JSON(http.StatusOK, result)
 	}
 }
@@ -198,15 +248,20 @@ func HandleGetOccupancy(rds *redis.Client) gin.HandlerFunc {
 		occupants := make([]model.RoomOccupant, 0, len(entries))
 		for _, z := range entries {
 			m := z.Member.(string)
-			parts := strings.SplitN(m, ":", 3)
+			parts := strings.Split(m, ":")
 			if len(parts) < 2 {
 				continue
 			}
+			isValid := true
+			if len(parts) >= 4 {
+				isValid = (parts[3] == "true")
+			}
 			occupants = append(occupants, model.RoomOccupant{
-				StudentID:   parts[0],
-				StudentName: parts[1],
-				CheckInAt:   time.UnixMilli(int64(z.Score)).UTC(),
-				IsOnDuty:    false,
+				StudentID:     parts[0],
+				StudentName:   parts[1],
+				CheckInAt:     time.UnixMilli(int64(z.Score)).UTC(),
+				IsOnDuty:      false,
+				IsValidMember: isValid,
 			})
 		}
 

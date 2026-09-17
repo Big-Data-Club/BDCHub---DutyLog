@@ -190,6 +190,77 @@ Authentication: Bearer JWT Token issued by BDC Hub Auth Service.
 
 ---
 
+### User Organization Flow
+
+#### 7. User Organizations (Smart Routing)
+* Method: `GET`
+* Path: `/user/organizations`
+* Headers: `Authorization: Bearer <JWT>`
+* Description: Returns organizations the authenticated user belongs to. Single-org users are automatically routed; multi-org users select manually; Super Admins receive all organizations.
+* Response: `200 OK`
+```json
+{
+  "user_id": 101,
+  "email": "student@bdc.edu.vn",
+  "is_super_admin": false,
+  "count": 1,
+  "organizations": [
+    {
+      "id": 1,
+      "slug": "bdc",
+      "name": "Big Data Club",
+      "org_role": "MEMBER",
+      "room_count": 3
+    }
+  ]
+}
+```
+
+---
+
+### Duty Shift Operations
+
+#### 8. Start Duty Shift
+* Method: `POST`
+* Path: `/rooms/{room_id}/shift/start`
+* Request Body: `{ "duty_staff_id": "101", "duty_staff_name": "Nguyen Van A", "duty_staff_email": "staff@bdc.edu.vn" }`
+* Response: `200 OK` (Records active shift and start time)
+
+#### 9. End Duty Shift
+* Method: `POST`
+* Path: `/rooms/{room_id}/shift/end`
+* Request Body: `{ "duty_staff_id": "101" }`
+* Response: `200 OK` (Calculates duration and sets status to COMPLETED)
+
+#### 10. Get Current Shift
+* Method: `GET`
+* Path: `/rooms/{room_id}/shift/current`
+* Response: `200 OK` (`{ "has_active_shift": true, "shift": { ... } }`)
+
+---
+
+### Super Admin Bottom-Up Inspection Endpoints
+
+#### 11. Hierarchy Inspection
+* Method: `GET`
+* Path: `/admin/inspection/hierarchy`
+* Headers: `Authorization: Bearer <ADMIN_JWT>`
+* Description: Returns full `Org -> Rooms` tree with room statistics.
+
+#### 12. Check-in/Check-out History
+* Method: `GET`
+* Path: `/admin/rooms/{room_id}/presence-history`
+* Headers: `Authorization: Bearer <ADMIN_JWT>`
+* Description: Detailed check-in/check-out logs with scanner identity (`scanner_id`, `scanner_name`) and membership validity (`is_valid_member`). Entries with `is_valid_member: false` are displayed in **RED**.
+
+#### 13. Duty Shift History
+* Method: `GET`
+* Path: `/admin/rooms/{room_id}/duty-history`
+* Headers: `Authorization: Bearer <ADMIN_JWT>`
+* Description: Shift records with staff identity, shift start time, shift end time, and total duration.
+
+---
+
 ## 2. Apache Kafka Event Contract
 
 * Topic Name: `dutylog.presence.v1`

@@ -15,6 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+
+	dutySync "github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/sync"
 )
 
 const qrTTL = 10 * time.Second
@@ -35,6 +37,8 @@ type QRGenerateResponse struct {
 type QRCheckinRequest struct {
 	Payload         string    `json:"payload" binding:"required"`
 	ClientTimestamp time.Time `json:"client_timestamp"`
+	ScannerID       string    `json:"scanner_id"`
+	ScannerName     string    `json:"scanner_name"`
 }
 
 // qrSecret returns the HMAC key, falling back to a dev default when unset.
@@ -99,8 +103,8 @@ func HandleGenerateQR(rds *redis.Client) gin.HandlerFunc {
 
 // HandleQRCheckin validates a QR payload (HMAC + Redis) and performs check-in.
 // POST /api/v1/rooms/:room_id/checkin-qr
-// Body: { payload, client_timestamp }
-func HandleQRCheckin(db *sql.DB, rds *redis.Client) gin.HandlerFunc {
+// Body: { payload, client_timestamp, scanner_id, scanner_name }
+func HandleQRCheckin(db *sql.DB, rds *redis.Client, syncService *dutySync.OrgSyncService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID := c.Param("room_id")
 		var req QRCheckinRequest
@@ -144,8 +148,22 @@ func HandleQRCheckin(db *sql.DB, rds *redis.Client) gin.HandlerFunc {
 		}
 		studentID, studentName := valParts[0], valParts[1]
 
+		// Resolve scanner identity
+		scannerID := req.ScannerID
+		scannerName := req.ScannerName
+		if scannerID == "" {
+			if uid, ok := c.Get("user_id"); ok {
+				scannerID = fmt.Sprintf("%v", uid)
+			}
+		}
+		if scannerName == "" {
+			if email, ok := c.Get("user_email"); ok {
+				scannerName = fmt.Sprintf("%v", email)
+			}
+		}
+
 		// 4. Perform check-in via shared logic
-		result, err := performCheckinDB(ctx, db, rds, roomID, studentID, studentName, "QR_CODE", time.Now().UTC())
+		result, err := performCheckinDB(ctx, db, rds, syncService, roomID, studentID, studentName, "QR_CODE", scannerID, scannerName, time.Now().UTC())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

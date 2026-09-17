@@ -1,29 +1,68 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView } from "react-native";
-import { Room } from "../types";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  SafeAreaView,
+} from "react-native";
+import { Room, Organization, User } from "../types";
 
 interface Props {
+  user: User;
+  organization: Organization;
   rooms: Room[];
   selectedRoom: Room | null;
   onSelectRoom: (room: Room) => void;
-  onNavigateToScan: () => void;
-  onNavigateToRoster: () => void;
-  onNavigateToQR: () => void;
+  canChangeOrg: boolean;
+  onChangeOrg: () => void;
+  onNavigateToInspection?: () => void;
+  onLogout: () => void;
 }
 
 export const RoomSelectionScreen: React.FC<Props> = ({
+  user,
+  organization,
   rooms,
   selectedRoom,
   onSelectRoom,
-  onNavigateToScan,
-  onNavigateToRoster,
-  onNavigateToQR,
+  canChangeOrg,
+  onChangeOrg,
+  onNavigateToInspection,
+  onLogout,
 }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>BDCHub - DutyLog</Text>
-        <Text style={styles.subtitle}>Select Room for Attendance & Duty</Text>
+        <View style={styles.topRow}>
+          <View style={styles.orgTag}>
+            <Text style={styles.orgTagText}>🏢 {organization.name}</Text>
+          </View>
+          <View style={styles.topButtons}>
+            {user.is_super_admin && onNavigateToInspection && (
+              <TouchableOpacity
+                style={styles.adminInspectionBtn}
+                onPress={onNavigateToInspection}
+              >
+                <Text style={styles.adminInspectionBtnText}>🔍 Super Admin</Text>
+              </TouchableOpacity>
+            )}
+            {canChangeOrg && (
+              <TouchableOpacity style={styles.changeOrgBtn} onPress={onChangeOrg}>
+                <Text style={styles.changeOrgBtnText}>Đổi Org</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
+              <Text style={styles.logoutBtnText}>Thoát</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={styles.title}>Select Duty Room</Text>
+        <Text style={styles.subtitle}>
+          Chọn phòng trực để bắt đầu ca làm việc, quét mã sinh viên hoặc tạo mã QR:
+        </Text>
       </View>
 
       <FlatList
@@ -42,51 +81,31 @@ export const RoomSelectionScreen: React.FC<Props> = ({
                 <Text style={styles.campusTag}>{item.campus}</Text>
                 <View style={styles.occupancyBadge}>
                   <Text style={styles.occupancyText}>
-                    {item.current_occupancy} / {item.capacity}
+                    Đang có: {item.current_occupancy} / {item.capacity}
                   </Text>
                 </View>
               </View>
 
               <Text style={styles.roomName}>{item.name}</Text>
               <Text style={styles.roomDetail}>
-                Building {item.building} • Room {item.room_number}
+                Tòa nhà {item.building} • Phòng số {item.room_number}
               </Text>
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.enterPrompt}>Vào phòng trực →</Text>
+              </View>
             </TouchableOpacity>
           );
         }}
-      />
-
-      {selectedRoom && (
-        <View style={styles.footer}>
-          <Text style={styles.activeRoomLabel}>
-            Active: <Text style={{ fontWeight: "700" }}>{selectedRoom.name}</Text>
-          </Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary]}
-              onPress={onNavigateToRoster}
-            >
-              <Text style={styles.buttonSecondaryText}>View Presence</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary]}
-              onPress={onNavigateToQR}
-            >
-              <Text style={styles.buttonSecondaryText}>Tạo QR</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonPrimary]}
-              onPress={onNavigateToScan}
-            >
-              <Text style={styles.buttonPrimaryText}>Open Scanner</Text>
-            </TouchableOpacity>
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Chưa có phòng trực nào trong tổ chức này.</Text>
           </View>
-        </View>
-      )}
+        }
+      />
     </SafeAreaView>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {
@@ -95,24 +114,80 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 14,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  orgTag: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  orgTagText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1D4ED8",
+  },
+  topButtons: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  adminInspectionBtn: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  adminInspectionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#B45309",
+  },
+  changeOrgBtn: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  changeOrgBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  logoutBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    color: "#94A3B8",
   },
   title: {
-    fontSize: 26,
-    fontWeight: "800",
+    fontSize: 24,
+    fontWeight: "900",
     color: "#0F172A",
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#64748B",
     marginTop: 4,
   },
   list: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    gap: 12,
+    padding: 20,
+    gap: 14,
   },
   card: {
     backgroundColor: "#FFFFFF",
@@ -137,7 +212,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   campusTag: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: "#2563EB",
     textTransform: "uppercase",
@@ -159,7 +234,7 @@ const styles = StyleSheet.create({
   },
   roomName: {
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#1E293B",
   },
   roomDetail: {
@@ -167,43 +242,25 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 4,
   },
-  footer: {
-    backgroundColor: "#FFFFFF",
-    padding: 16,
+  cardFooter: {
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-  },
-  activeRoomLabel: {
-    fontSize: 13,
-    color: "#475569",
-    marginBottom: 12,
-  },
-  actionRow: {
+    borderTopColor: "#F1F5F9",
     flexDirection: "row",
-    gap: 12,
+    justifyContent: "flex-end",
   },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+  enterPrompt: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  emptyContainer: {
+    padding: 40,
     alignItems: "center",
   },
-  buttonPrimary: {
-    backgroundColor: "#2563EB",
-  },
-  buttonPrimaryText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  buttonSecondary: {
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-  },
-  buttonSecondaryText: {
-    color: "#334155",
-    fontSize: 15,
-    fontWeight: "600",
+  emptyText: {
+    color: "#94A3B8",
+    fontSize: 14,
   },
 });

@@ -33,21 +33,21 @@ func main() {
 	redisClient := rds.Connect()
 	defer redisClient.Close()
 
-	// ── Schema migrations (idempotent CREATE TABLE IF NOT EXISTS) ─────────────
+	// ── Schema migrations (idempotent forward-only migrations) ────────────────
 	if err := appdb.RunMigrations(db); err != nil {
 		log.Printf("[MAIN] Warning: migration error: %v", err)
 	}
 
-	// ── Organisation sync: pull from Auth Service ─────────────────────────────
+	// ── Organisation & Member sync: pull from Auth Service ────────────────────
 	syncService := dutySync.NewOrgSyncService(authURL, db)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		orgs, err := syncService.SyncOrganizations(ctx)
 		if err != nil {
 			log.Printf("[MAIN] Warning: initial org sync failed (will retry): %v", err)
 		} else {
-			log.Printf("[MAIN] Initial org sync: %d organisations loaded", len(orgs))
+			log.Printf("[MAIN] Initial org sync: %d organisations and members loaded", len(orgs))
 		}
 	}()
 	syncService.StartPeriodicSync(context.Background(), 5*time.Minute)
@@ -65,22 +65,33 @@ func main() {
 
 	api := r.Group("/api/v1")
 	{
+		// Optional auth parses user claims if Authorization header present
+		api.Use(middleware.OptionalAuth())
+
+		// ── User Organization Flow (Auto-navigate if 1 org, select manually if >1) ─
+		api.GET("/user/organizations", handler.HandleGetUserOrganizations(db))
+
 		// ── Public presence endpoints (synchronous critical path) ─────────────
 		api.GET("/organizations", handler.HandleGetOrganizations(db))
 		api.GET("/orgs/:org_id/rooms", handler.HandleGetOrgRooms(db, redisClient))
-		api.POST("/rooms/:room_id/checkin", handler.HandleCheckIn(db, redisClient))
+		api.POST("/rooms/:room_id/checkin", handler.HandleCheckIn(db, redisClient, syncService))
 		api.POST("/rooms/:room_id/checkout", handler.HandleCheckOut(db, redisClient))
 		api.GET("/rooms/:room_id/occupancy", handler.HandleGetOccupancy(redisClient))
+
+		// ── Duty Shifts Flow (Start shift, End shift, Get current shift) ────────
+		api.POST("/rooms/:room_id/shift/start", handler.HandleStartShift(db))
+		api.POST("/rooms/:room_id/shift/end", handler.HandleEndShift(db))
+		api.GET("/rooms/:room_id/shift/current", handler.HandleGetCurrentShift(db))
 
 		// ── QR flow ───────────────────────────────────────────────────────────
 		// Generate a 10-second rotating QR token (called by student device)
 		api.POST("/qr/generate", handler.HandleGenerateQR(redisClient))
 		// Validate and check-in via QR token (called by duty-staff scanner)
-		api.POST("/rooms/:room_id/checkin-qr", handler.HandleQRCheckin(db, redisClient))
+		api.POST("/rooms/:room_id/checkin-qr", handler.HandleQRCheckin(db, redisClient, syncService))
 
-		// ── Organisation sync (webhook or admin trigger) ──────────────────────
+		// ── Organisation & Member sync (webhook or admin trigger) ─────────────
 		api.POST("/sync/organizations", func(c *gin.Context) {
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 			defer cancel()
 			orgs, err := syncService.SyncOrganizations(ctx)
 			if err != nil {
@@ -88,15 +99,21 @@ func main() {
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{
-				"message":       "Organizations successfully synchronized from Auth Service",
+				"message":       "Organizations and members successfully synchronized from Auth Service",
 				"synced_count":  len(orgs),
 				"organizations": orgs,
 			})
 		})
 
-		// ── Admin-protected room management (ADMIN JWT required) ──────────────
+		// ── Super Admin Flow (Bottom-up System Inspection & Management) ────────
 		admin := api.Group("/admin", middleware.RequireAdminJWT())
 		{
+			// Bottom-Up System Inspection: Org -> Room -> Duty History & Check-in/out History
+			admin.GET("/inspection/hierarchy", handler.HandleAdminInspectionHierarchy(db))
+			admin.GET("/rooms/:room_id/presence-history", handler.HandleAdminRoomPresenceHistory(db))
+			admin.GET("/rooms/:room_id/duty-history", handler.HandleAdminRoomDutyHistory(db))
+
+			// Room management
 			admin.GET("/organizations", handler.HandleGetOrganizations(db))
 			admin.GET("/orgs/:org_id/rooms", handler.HandleGetOrgRooms(db, redisClient))
 			admin.POST("/orgs/:org_id/rooms", handler.HandleAdminCreateRoom(db))
