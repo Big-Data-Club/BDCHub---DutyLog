@@ -66,6 +66,7 @@ func main() {
 	api := r.Group("/api/v1")
 	{
 		// ── Public presence endpoints (synchronous critical path) ─────────────
+		api.GET("/organizations", handler.HandleGetOrganizations(db))
 		api.GET("/orgs/:org_id/rooms", handler.HandleGetOrgRooms(db, redisClient))
 		api.POST("/rooms/:room_id/checkin", handler.HandleCheckIn(db, redisClient))
 		api.POST("/rooms/:room_id/checkout", handler.HandleCheckOut(db, redisClient))
@@ -96,6 +97,7 @@ func main() {
 		// ── Admin-protected room management (ADMIN JWT required) ──────────────
 		admin := api.Group("/admin", middleware.RequireAdminJWT())
 		{
+			admin.GET("/organizations", handler.HandleGetOrganizations(db))
 			admin.GET("/orgs/:org_id/rooms", handler.HandleGetOrgRooms(db, redisClient))
 			admin.POST("/orgs/:org_id/rooms", handler.HandleAdminCreateRoom(db))
 			admin.PUT("/rooms/:room_id", handler.HandleAdminUpdateRoom(db))

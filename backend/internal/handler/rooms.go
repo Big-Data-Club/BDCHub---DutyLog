@@ -154,3 +154,52 @@ func HandleAdminDeleteRoom(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"id": roomID, "message": "room deactivated"})
 	}
 }
+
+// HandleGetOrganizations returns all active organizations and their active room counts.
+// GET /api/v1/organizations
+func HandleGetOrganizations(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		rows, err := db.QueryContext(ctx, `
+			SELECT o.id, o.slug, o.name, COALESCE(o.description, ''), o.is_active, COUNT(r.id) AS room_count
+			FROM organizations o
+			LEFT JOIN rooms r ON r.organization_id = o.id AND r.is_active = true
+			WHERE o.is_active = true
+			GROUP BY o.id, o.slug, o.name, o.description, o.is_active
+			ORDER BY o.id ASC
+		`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		defer rows.Close()
+
+		type OrgItem struct {
+			ID          int64  `json:"id"`
+			Slug        string `json:"slug"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			IsActive    bool   `json:"is_active"`
+			RoomCount   int    `json:"room_count"`
+		}
+
+		var orgs []OrgItem
+		for rows.Next() {
+			var o OrgItem
+			if err := rows.Scan(&o.ID, &o.Slug, &o.Name, &o.Description, &o.IsActive, &o.RoomCount); err != nil {
+				continue
+			}
+			orgs = append(orgs, o)
+		}
+		if orgs == nil {
+			orgs = []OrgItem{}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"organizations": orgs,
+		})
+	}
+}
+
