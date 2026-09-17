@@ -22,7 +22,7 @@ export const RoomSelectionScreen: React.FC<Props> = ({
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>CLBCheckin</Text>
+        <Text style={styles.title}>BDCHub - DutyLog</Text>
         <Text style={styles.subtitle}>Select Room for Attendance & Duty</Text>
       </View>
 

@@ -1,5 +1,5 @@
 {
-  "name": "clbcheckin-mobile",
+  "name": "bdchub-dutylog-mobile",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
@@ -15,9 +15,9 @@
     "expo-status-bar": "~1.12.1",
     "lucide-react-native": "^0.395.0",
     "react": "18.2.0",
-    "react-native": "0.74.1",
+    "react-native": "0.74.5",
     "react-native-qrcode-svg": "^6.3.0",
-    "react-native-svg": "^15.0.0"
+    "react-native-svg": "15.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
