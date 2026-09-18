@@ -1,8 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ActivityIndicator, Text, Image } from "react-native";
 import { Room, Organization, User } from "./src/types";
-import { fetchRooms, fetchUserOrganizations, setCurrentUser } from "./src/api/client";
+import {
+  fetchRooms,
+  fetchUserOrganizations,
+  setCurrentUser,
+  restoreSession,
+  clearSession,
+} from "./src/api/client";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { OrgSelectionScreen } from "./src/screens/OrgSelectionScreen";
 import { RoomSelectionScreen } from "./src/screens/RoomSelectionScreen";
@@ -29,6 +35,28 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [scannerMode, setScannerMode] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
   const [loading, setLoading] = useState(false);
+  const [restoringSession, setRestoringSession] = useState(true);
+
+  // ── Session Restoration on Cold App Startup (Silent Refresh) ─────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const restoredUser = await restoreSession();
+        if (restoredUser) {
+          setCurrentUserState(restoredUser);
+          // Load organizations with the fresh in-memory access token
+          const orgsData = await fetchUserOrganizations();
+          const orgList = orgsData.organizations || [];
+          setOrganizations(orgList);
+          setCurrentScreen("ORG_SELECT");
+        }
+      } catch (err) {
+        console.warn("Silent session restoration failed:", err);
+      } finally {
+        setRestoringSession(false);
+      }
+    })();
+  }, []);
 
   const handleLoginSuccess = async (user: User) => {
     setCurrentUserState(user);
@@ -78,7 +106,8 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await clearSession();
     setCurrentUser(null);
     setCurrentUserState(null);
     setSelectedOrg(null);
@@ -88,13 +117,36 @@ export default function App() {
     setCurrentScreen("LOGIN");
   };
 
+  // ── Cold Boot Splash / Session Restoring View ──────────────────────────────
+  if (restoringSession) {
+    return (
+      <View style={styles.splashContainer}>
+        <StatusBar style="light" />
+        <Image
+          source={require("./assets/bdclogo.png")}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+        <View style={styles.splashBrandRow}>
+          <Text style={styles.splashTitleBdc}>BDC </Text>
+          <Text style={styles.splashTitleHub}>HUB</Text>
+        </View>
+        <View style={styles.splashPill}>
+          <Text style={styles.splashPillText}>DUTYLOG</Text>
+        </View>
+        <ActivityIndicator size="small" color="#2563EB" style={styles.splashSpinner} />
+        <Text style={styles.splashSubtext}>Đang khôi phục phiên làm việc an toàn...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#00F0FF" />
+          <ActivityIndicator size="large" color="#2563EB" />
         </View>
       )}
 
@@ -196,13 +248,65 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#070B14",
+    backgroundColor: "#F1F5F9",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(7, 11, 20, 0.75)",
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
     zIndex: 99,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  // ── Splash Screen ─────────────────────────────────────────────────────────
+  splashContainer: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  splashLogo: {
+    width: 72,
+    height: 72,
+    marginBottom: 16,
+  },
+  splashBrandRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 6,
+  },
+  splashTitleBdc: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  splashTitleHub: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#2563EB",
+    letterSpacing: -0.5,
+  },
+  splashPill: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 14,
+    marginBottom: 24,
+  },
+  splashPillText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 1,
+  },
+  splashSpinner: {
+    marginBottom: 10,
+  },
+  splashSubtext: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
   },
 });

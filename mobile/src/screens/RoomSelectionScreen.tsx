@@ -1,12 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   SafeAreaView,
+  FlatList,
   Image,
+  Platform,
+  StatusBar as RNStatusBar,
+  Alert,
 } from "react-native";
 import { Room, Organization, User } from "../types";
 
@@ -21,6 +25,8 @@ interface Props {
   onNavigateToInspection?: () => void;
 }
 
+type RoomFilterType = "ALL" | "CS1" | "CS2" | "AVAILABLE";
+
 export const RoomSelectionScreen: React.FC<Props> = ({
   user,
   organization,
@@ -31,326 +37,534 @@ export const RoomSelectionScreen: React.FC<Props> = ({
   onLogout,
   onNavigateToInspection,
 }) => {
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Bar with Org tag & Back Button */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBackToOrg} activeOpacity={0.8}>
-          <Text style={styles.backBtnText}>← Đổi tổ chức</Text>
-        </TouchableOpacity>
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState<RoomFilterType>("ALL");
 
-        <View style={styles.orgTag}>
-          <Image
-            source={require("../../assets/bdclogo.png")}
-            style={styles.logoMini}
-            resizeMode="contain"
-          />
-          <Text style={styles.orgTagText} numberOfLines={1}>{organization.name}</Text>
+  const handleUserProfilePress = () => {
+    Alert.alert(
+      "Tài khoản định danh",
+      `Người dùng: ${user.name || user.email}\nVai trò: ${user.roles.join(", ") || "Thành viên"}\n\nTính năng cấu hình tài khoản, mã vạch và mã QR cá nhân đang trong giai đoạn phát triển, vui lòng thử lại sau.`
+    );
+  };
+
+  // Filter rooms by search query and category filter
+  const filteredRooms = rooms.filter((room) => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      room.name.toLowerCase().includes(q) ||
+      room.id.toLowerCase().includes(q) ||
+      room.building.toLowerCase().includes(q) ||
+      room.room_number.toLowerCase().includes(q) ||
+      room.campus.toLowerCase().includes(q);
+
+    if (!matchesSearch) return false;
+
+    if (selectedFilter === "CS1") {
+      const c = room.campus.toLowerCase();
+      return c.includes("campus 1") || c.includes("cs1") || c.includes("cơ sở 1");
+    }
+    if (selectedFilter === "CS2") {
+      const c = room.campus.toLowerCase();
+      return c.includes("campus 2") || c.includes("cs2") || c.includes("cơ sở 2");
+    }
+    if (selectedFilter === "AVAILABLE") {
+      const occ = room.current_occupancy || 0;
+      const cap = room.capacity || 30;
+      return occ < cap;
+    }
+    return true;
+  });
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* ── Top Navigation Bar ─────────────────────────────────────────── */}
+        <View style={styles.navBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBackToOrg}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backArrow}>‹</Text>
+          </TouchableOpacity>
+
+          <View style={styles.navOrgCol}>
+            <View style={styles.navOrgRow}>
+              <Image
+                source={require("../../assets/bdclogo.png")}
+                style={styles.navLogo}
+                resizeMode="contain"
+              />
+              <View style={styles.navOrgTextCol}>
+                <Text style={styles.navOrgBadge}>TỔ CHỨC ĐÃ CHỌN</Text>
+                <Text style={styles.navOrgName} numberOfLines={1}>
+                  {organization.name}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* User Profile Avatar (Alerts feature in development) */}
+          <TouchableOpacity
+            style={styles.userAvatarBtn}
+            onPress={handleUserProfilePress}
+            activeOpacity={0.8}
+          >
+            <View style={styles.userAvatarCircle}>
+              <Text style={styles.userAvatarText}>
+                {(user.name || user.email || "U").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.userActiveDot} />
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={onLogout} activeOpacity={0.8}>
-          <Text style={styles.logoutBtnText}>Thoát</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Screen Title & Prompt */}
-      <View style={styles.titleSection}>
-        <Text style={styles.stepBadge}>BƯỚC 2 / 2</Text>
-        <Text style={styles.screenTitle}>Select Duty Room</Text>
-        <Text style={styles.screenSubtitle}>
-          Chọn phòng trực để truy cập trạm điều khiển, quét điểm danh và quản lý phiên trực
-        </Text>
-      </View>
-
-      {/* Super Admin Inspection Banner */}
-      {user.is_super_admin && onNavigateToInspection && (
-        <TouchableOpacity
-          style={styles.inspectionBanner}
-          onPress={onNavigateToInspection}
-          activeOpacity={0.85}
-        >
-          <View style={styles.inspectionBannerLeft}>
-            <View style={styles.inspectionBadge}>
-              <Text style={styles.inspectionBadgeText}>🛡️ TOÀN QUYỀN HỆ THỐNG</Text>
-            </View>
-            <Text style={styles.inspectionBannerTitle}>Super Admin Inspection</Text>
-            <Text style={styles.inspectionBannerSub}>
-              Xem cấu trúc phân cấp: {organization.name} → Phòng trực → Lịch sử
+        {/* ── Hero Section (Step 2, Title, Subtitle, 3D Graphic) ─────────── */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroContentLeft}>
+            <Text style={styles.stepBadgeText}>BƯỚC 2 / 2</Text>
+            <Text style={styles.screenTitle}>Chọn phòng trực</Text>
+            <Text style={styles.screenSubtitle}>
+              Chọn phòng trực để truy cập trạm điều khiển, quét điểm danh và quản lý phiên trực.
             </Text>
           </View>
-          <Text style={styles.inspectionBannerArrow}>→</Text>
-        </TouchableOpacity>
-      )}
 
-      {/* Rooms List */}
-      <FlatList
-        data={rooms}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const isSelected = selectedRoom?.id === item.id;
-          const occupancy = item.current_occupancy || 0;
-          const capacity = item.capacity || 30;
-          const ratio = Math.min(occupancy / capacity, 1);
-          const percent = Math.round(ratio * 100);
-
-          return (
-            <TouchableOpacity
-              style={[styles.card, isSelected && styles.cardSelected]}
-              onPress={() => onSelectRoom(item)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.campusBadge}>
-                  <Text style={styles.campusBadgeText}>{item.campus}</Text>
-                </View>
-
-                <View style={styles.gaugePill}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.gaugeText}>
-                    {occupancy} / {capacity} người ({percent}%)
-                  </Text>
-                </View>
+          {/* 3D Isometric Room Graphic Box */}
+          <View style={styles.isometricGraphicBox}>
+            <View style={styles.isometricPlatformBase}>
+              <View style={styles.isometricPlatformTop}>
+                <Text style={styles.isometricRoomEmoji}>🏢</Text>
               </View>
-
-              <Text style={styles.roomName}>{item.name}</Text>
-              <Text style={styles.roomDetail}>
-                Tòa nhà {item.building} · Phòng số {item.room_number} · Mã: {item.id}
-              </Text>
-
-              {/* Progress bar gauge */}
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${percent}%`,
-                      backgroundColor:
-                        percent > 85 ? "#EF4444" : percent > 50 ? "#F59E0B" : "#00F0FF",
-                    },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.cardFooter}>
-                <Text style={styles.enterPrompt}>TRUY CẬP PHÒNG TRỰC</Text>
-                <Text style={styles.enterArrow}>→</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Chưa có phòng trực nào trong tổ chức này.</Text>
+            </View>
+            <View style={styles.floatingCubeOne} />
+            <View style={styles.floatingCubeTwo} />
           </View>
-        }
-      />
+        </View>
+
+        {/* ── Super Admin Inspection Banner (if Super Admin) ──────────────── */}
+        {user.is_super_admin && onNavigateToInspection && (
+          <TouchableOpacity
+            style={styles.inspectionBanner}
+            onPress={onNavigateToInspection}
+            activeOpacity={0.85}
+          >
+            <View style={styles.inspectionBannerLeft}>
+              <View style={styles.inspectionBadge}>
+                <Text style={styles.inspectionBadgeText}>🛡️ TOÀN QUYỀN HỆ THỐNG</Text>
+              </View>
+              <Text style={styles.inspectionBannerTitle}>Super Admin Inspection</Text>
+              <Text style={styles.inspectionBannerSub}>
+                Cấu trúc phân cấp: {organization.name} → Phòng trực → Lịch sử quét & Ca trực
+              </Text>
+            </View>
+            <Text style={styles.inspectionBannerArrow}>→</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Search Bar ─────────────────────────────────────────────────── */}
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm phòng trực, tòa nhà, mã phòng..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 ? (
+            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearSearchBtn}>
+              <Text style={styles.clearSearchText}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* ── Filter Pills for Rooms ─────────────────────────────────────── */}
+        <View style={styles.filterPillsRow}>
+          <TouchableOpacity
+            style={[styles.filterPill, selectedFilter === "ALL" && styles.filterPillActive]}
+            onPress={() => setSelectedFilter("ALL")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.filterPillIcon}>▦</Text>
+            <Text style={[styles.filterPillText, selectedFilter === "ALL" && styles.filterPillTextActive]}>
+              Tất cả ({rooms.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, selectedFilter === "CS1" && styles.filterPillActive]}
+            onPress={() => setSelectedFilter("CS1")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.filterPillIcon}>📍</Text>
+            <Text style={[styles.filterPillText, selectedFilter === "CS1" && styles.filterPillTextActive]}>
+              Cơ sở 1
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, selectedFilter === "CS2" && styles.filterPillActive]}
+            onPress={() => setSelectedFilter("CS2")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.filterPillIcon}>📍</Text>
+            <Text style={[styles.filterPillText, selectedFilter === "CS2" && styles.filterPillTextActive]}>
+              Cơ sở 2
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, selectedFilter === "AVAILABLE" && styles.filterPillActive]}
+            onPress={() => setSelectedFilter("AVAILABLE")}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.filterDot, { backgroundColor: "#10B981" }]} />
+            <Text style={[styles.filterPillText, selectedFilter === "AVAILABLE" && styles.filterPillTextActive]}>
+              Còn chỗ
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Rooms List ─────────────────────────────────────────────────── */}
+        <FlatList
+          data={filteredRooms}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const isSelected = selectedRoom?.id === item.id;
+            const occupancy = item.current_occupancy || 0;
+            const capacity = item.capacity || 30;
+            const ratio = Math.min(occupancy / capacity, 1);
+            const percent = Math.round(ratio * 100);
+
+            const isHigh = percent >= 85;
+            const isMedium = percent >= 50;
+
+            return (
+              <TouchableOpacity
+                style={[styles.card, isSelected && styles.cardSelected]}
+                activeOpacity={0.85}
+                onPress={() => onSelectRoom(item)}
+              >
+                {/* Left Room Icon */}
+                <View style={[styles.roomIconBox, isHigh ? styles.iconHigh : styles.iconNormal]}>
+                  <Text style={styles.roomIconEmoji}>🏢</Text>
+                </View>
+
+                {/* Center Content */}
+                <View style={styles.cardBody}>
+                  {/* Top Row: Slug + Capacity Badge + Chevron */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.slugBadge}>
+                      <Text style={styles.slugText}>
+                        PHÒNG #{item.id} · TÒA {item.building}
+                      </Text>
+                    </View>
+                    <View style={styles.roleAndArrowRow}>
+                      <View
+                        style={[
+                          styles.occupancyBadge,
+                          isHigh
+                            ? styles.occBadgeHigh
+                            : isMedium
+                            ? styles.occBadgeMed
+                            : styles.occBadgeLow,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.occDot,
+                            {
+                              backgroundColor: isHigh
+                                ? "#EF4444"
+                                : isMedium
+                                ? "#F59E0B"
+                                : "#10B981",
+                            },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.occupancyText,
+                            {
+                              color: isHigh
+                                ? "#DC2626"
+                                : isMedium
+                                ? "#D97706"
+                                : "#059669",
+                            },
+                          ]}
+                        >
+                          {occupancy}/{capacity} người ({percent}%)
+                        </Text>
+                      </View>
+                      <Text style={styles.chevronArrow}>›</Text>
+                    </View>
+                  </View>
+
+                  {/* Room Name */}
+                  <Text style={styles.roomName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+
+                  {/* Room Location Details */}
+                  <Text style={styles.roomDetail}>
+                    Phòng số {item.room_number} · Tòa nhà {item.building} · {item.campus}
+                  </Text>
+
+                  {/* Capacity Progress Bar */}
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${percent}%`,
+                          backgroundColor: isHigh
+                            ? "#EF4444"
+                            : isMedium
+                            ? "#F59E0B"
+                            : "#2563EB",
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  {/* Tags Row */}
+                  <View style={styles.tagsRow}>
+                    <View style={styles.tagPill}>
+                      <Text style={styles.tagIcon}>📍</Text>
+                      <Text style={styles.tagText}>{item.campus}</Text>
+                    </View>
+                    <View style={styles.tagPill}>
+                      <Text style={styles.tagIcon}>👥</Text>
+                      <Text style={styles.tagText}>Sức chứa: {capacity}</Text>
+                    </View>
+                    <View style={styles.tagPill}>
+                      <View style={styles.activeTagDot} />
+                      <Text style={styles.tagText}>Đang mở cửa</Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🏢</Text>
+              <Text style={styles.emptyTitle}>Không tìm thấy phòng trực nào</Text>
+              <Text style={styles.emptySub}>
+                Không có phòng nào phù hợp với từ khóa hoặc bộ lọc đã chọn.
+              </Text>
+            </View>
+          }
+        />
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
   container: {
     flex: 1,
-    backgroundColor: "#070B14",
+    backgroundColor: "#F8FAFC",
+    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight || 24) + 6 : 4,
   },
-  header: {
+
+  // ── Top Bar ───────────────────────────────────────────────────────────────
+  navBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E293B",
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  backBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#131E35",
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 8,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  backBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#38BDF8",
+  backArrow: {
+    fontSize: 26,
+    color: "#334155",
+    fontWeight: "300",
+    marginTop: -4,
   },
-  orgTag: {
+  navOrgCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  navOrgRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#131E35",
-    borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.3)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    maxWidth: 180,
   },
-  logoMini: {
-    width: 20,
-    height: 20,
+  navLogo: {
+    width: 28,
+    height: 28,
   },
-  orgTagText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#F8FAFC",
+  navOrgTextCol: {
+    flex: 1,
   },
-  logoutBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  logoutBtnText: {
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  titleSection: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-  },
-  stepBadge: {
-    fontSize: 10,
+  navOrgBadge: {
+    fontSize: 9,
     fontWeight: "800",
-    color: "#00F0FF",
-    letterSpacing: 1.5,
+    color: "#2563EB",
+    letterSpacing: 0.5,
+  },
+  navOrgName: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#0F2B5C",
+  },
+  userAvatarBtn: {
+    position: "relative",
+  },
+  userAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1.5,
+    borderColor: "#2563EB",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  userAvatarText: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#2563EB",
+  },
+  userActiveDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#10B981",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+
+  // ── Hero Section ──────────────────────────────────────────────────────────
+  heroSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  heroContentLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  stepBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2563EB",
+    letterSpacing: 1,
     marginBottom: 4,
   },
   screenTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "900",
-    color: "#FFFFFF",
+    color: "#0F172A",
     letterSpacing: -0.5,
+    marginBottom: 4,
   },
   screenSubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: "#64748B",
-    marginTop: 4,
-    lineHeight: 18,
+    lineHeight: 17,
   },
-  list: {
-    padding: 20,
-    gap: 16,
+
+  // 3D Isometric Room Graphic
+  isometricGraphicBox: {
+    width: 86,
+    height: 86,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
   },
-  card: {
-    backgroundColor: "#0F172A",
+  isometricPlatformBase: {
+    width: 66,
+    height: 66,
     borderRadius: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: "rgba(56, 189, 248, 0.2)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  cardSelected: {
-    borderColor: "#00F0FF",
-    backgroundColor: "#131E35",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    backgroundColor: "rgba(37, 99, 235, 0.08)",
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10,
-  },
-  campusBadge: {
-    backgroundColor: "rgba(0, 240, 255, 0.12)",
     borderWidth: 1,
-    borderColor: "rgba(0, 240, 255, 0.3)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    borderColor: "rgba(37, 99, 235, 0.18)",
   },
-  campusBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#00F0FF",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  gaugePill: {
-    flexDirection: "row",
+  isometricPlatformTop: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#131E35",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
+  isometricRoomEmoji: {
+    fontSize: 24,
+  },
+  floatingCubeOne: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
     borderRadius: 3,
-    backgroundColor: "#10B981",
+    backgroundColor: "#60A5FA",
+    opacity: 0.7,
   },
-  gaugeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#E2E8F0",
+  floatingCubeTwo: {
+    position: "absolute",
+    bottom: 6,
+    left: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: "#93C5FD",
+    opacity: 0.7,
   },
-  roomName: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
-  },
-  roomDetail: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 4,
-  },
-  progressTrack: {
-    height: 6,
-    backgroundColor: "#1E293B",
-    borderRadius: 3,
-    marginTop: 14,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  enterPrompt: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#38BDF8",
-    letterSpacing: 0.5,
-  },
-  enterArrow: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#38BDF8",
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: "center",
-  },
-  emptyText: {
-    color: "#64748B",
-    fontSize: 13,
-  },
+
+  // ── Super Admin Banner ────────────────────────────────────────────────────
   inspectionBanner: {
     backgroundColor: "rgba(245, 158, 11, 0.08)",
     borderWidth: 1,
     borderColor: "rgba(245, 158, 11, 0.4)",
-    borderRadius: 14,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    borderRadius: 16,
+    padding: 14,
+    marginHorizontal: 18,
+    marginBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -365,28 +579,290 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
     alignSelf: "flex-start",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   inspectionBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "900",
-    color: "#F59E0B",
+    color: "#D97706",
     letterSpacing: 0.5,
   },
   inspectionBannerTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#FBBF24",
+    color: "#B45309",
   },
   inspectionBannerSub: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#78350F",
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   inspectionBannerArrow: {
     fontSize: 18,
     fontWeight: "900",
-    color: "#F59E0B",
+    color: "#D97706",
+  },
+
+  // ── Search Bar ────────────────────────────────────────────────────────────
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginHorizontal: 18,
+    paddingHorizontal: 14,
+    height: 48,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    fontSize: 15,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: "#0F172A",
+  },
+  clearSearchBtn: {
+    padding: 4,
+  },
+  clearSearchText: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+
+  // ── Filter Pills Row ──────────────────────────────────────────────────────
+  filterPillsRow: {
+    flexDirection: "row",
+    paddingHorizontal: 18,
+    marginBottom: 14,
+    gap: 8,
+  },
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 12,
+    gap: 5,
+  },
+  filterPillActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  filterPillIcon: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  filterDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  filterPillText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  filterPillTextActive: {
+    color: "#FFFFFF",
+  },
+
+  // ── Room Cards ────────────────────────────────────────────────────────────
+  listContent: {
+    paddingHorizontal: 18,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  card: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.9)",
+    shadowColor: "#0F2B5C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    gap: 14,
+  },
+  cardSelected: {
+    borderColor: "#2563EB",
+    borderWidth: 1.5,
+  },
+  roomIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  iconNormal: {
+    backgroundColor: "#EFF6FF",
+  },
+  iconHigh: {
+    backgroundColor: "#FEF2F2",
+  },
+  roomIconEmoji: {
+    fontSize: 24,
+  },
+  cardBody: {
+    flex: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  slugBadge: {
+    backgroundColor: "rgba(37, 99, 235, 0.08)",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  slugText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#2563EB",
+    letterSpacing: 0.4,
+  },
+  roleAndArrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  occupancyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  occBadgeLow: {
+    backgroundColor: "#ECFDF5",
+  },
+  occBadgeMed: {
+    backgroundColor: "#FEF3C7",
+  },
+  occBadgeHigh: {
+    backgroundColor: "#FEE2E2",
+  },
+  occDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  occupancyText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  chevronArrow: {
+    fontSize: 18,
+    color: "#94A3B8",
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  roomName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  roomDetail: {
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 10,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  tagsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  tagIcon: {
+    fontSize: 10,
+  },
+  activeTagDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "#10B981",
+  },
+  tagText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#475569",
+  },
+
+  // ── Empty State ───────────────────────────────────────────────────────────
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#334155",
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
   },
 });

@@ -1,3 +1,4 @@
+import * as SecureStore from "expo-secure-store";
 import {
   Room,
   Occupant,
@@ -13,23 +14,28 @@ import {
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8086/api/v1";
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || "http://localhost:8080";
 
-let currentToken: string = "";
+// Security Keys for Hardware-backed Keystore (Android) / Keychain (iOS)
+const SECURE_REFRESH_TOKEN_KEY = "bdchub_dutylog_refresh_token";
+const SECURE_USER_META_KEY = "bdchub_dutylog_user_meta";
+
+// ── Strict In-Memory Access Token (NEVER saved to AsyncStorage or unencrypted disk) ──
+let inMemoryAccessToken: string | null = null;
 let currentUser: User | null = null;
 
 export function setAuthToken(token: string) {
-  currentToken = token;
+  inMemoryAccessToken = token;
 }
 
 export function getAuthToken(): string {
-  return currentToken;
+  return inMemoryAccessToken || "";
 }
 
 export function setCurrentUser(user: User | null) {
   currentUser = user;
   if (user?.token) {
-    currentToken = user.token;
+    inMemoryAccessToken = user.token;
   } else {
-    currentToken = "";
+    inMemoryAccessToken = null;
   }
 }
 
@@ -37,14 +43,193 @@ export function getCurrentUser(): User | null {
   return currentUser;
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (currentToken) {
-    headers["Authorization"] = `Bearer ${currentToken}`;
+  if (inMemoryAccessToken) {
+    headers["Authorization"] = `Bearer ${inMemoryAccessToken}`;
   }
   return headers;
+}
+
+// ── Secure Session Persistence (Keystore / Keychain) ────────────────────────
+
+export async function saveSession(user: User, refreshToken?: string): Promise<void> {
+  // 1. Store Access Token & User state strictly in memory
+  inMemoryAccessToken = user.token;
+  currentUser = user;
+
+  // 2. Store Refresh Token in hardware-backed SecureStore (iOS Keychain / Android Keystore)
+  if (refreshToken) {
+    try {
+      await SecureStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, refreshToken, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED,
+      });
+    } catch (err) {
+      console.warn("Failed to store refresh token in SecureStore:", err);
+    }
+  }
+
+  // 3. Store non-sensitive user metadata for instant recovery on app startup
+  try {
+    const meta = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      roles: user.roles,
+      is_super_admin: user.is_super_admin,
+    };
+    await SecureStore.setItemAsync(SECURE_USER_META_KEY, JSON.stringify(meta), {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED,
+    });
+  } catch (err) {
+    console.warn("Failed to store user metadata in SecureStore:", err);
+  }
+}
+
+export async function refreshAccessToken(): Promise<boolean> {
+  try {
+    const storedRt = await SecureStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
+    if (!storedRt) return false;
+
+    const res = await fetch(`${AUTH_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: storedRt }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const newAt = data.token;
+      const newRt = data.refreshToken || storedRt;
+
+      // Update in-memory access token
+      inMemoryAccessToken = newAt;
+
+      // Rotate refresh token in Keychain/Keystore if new one is provided
+      if (newRt && newRt !== storedRt) {
+        await SecureStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, newRt, {
+          keychainAccessible: SecureStore.WHEN_UNLOCKED,
+        });
+      }
+
+      if (currentUser) {
+        currentUser.token = newAt;
+      }
+      return true;
+    } else {
+      // Refresh token expired or revoked
+      await clearSession();
+      return false;
+    }
+  } catch (err) {
+    console.warn("Token refresh network failure:", err);
+    return false;
+  }
+}
+
+export async function restoreSession(): Promise<User | null> {
+  try {
+    const storedRt = await SecureStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
+    if (!storedRt) {
+      return null;
+    }
+
+    // Attempt silent token refresh with backend
+    const refreshed = await refreshAccessToken();
+    if (refreshed && inMemoryAccessToken) {
+      // Restore user object from cached metadata
+      let userMeta: any = null;
+      try {
+        const metaStr = await SecureStore.getItemAsync(SECURE_USER_META_KEY);
+        if (metaStr) userMeta = JSON.parse(metaStr);
+      } catch {}
+
+      const user: User = {
+        id: userMeta?.id || 1,
+        email: userMeta?.email || "user@bdc.edu.vn",
+        name: userMeta?.name || "BDC Member",
+        roles: userMeta?.roles || ["ROLE_USER"],
+        is_super_admin: Boolean(userMeta?.is_super_admin),
+        token: inMemoryAccessToken,
+      };
+
+      currentUser = user;
+      return user;
+    }
+
+    // Fallback: If offline and refresh token is present with local mock/dev
+    const metaStr = await SecureStore.getItemAsync(SECURE_USER_META_KEY);
+    if (metaStr) {
+      const userMeta = JSON.parse(metaStr);
+      inMemoryAccessToken = "restored-offline-token-" + Date.now();
+      const user: User = {
+        id: userMeta.id,
+        email: userMeta.email,
+        name: userMeta.name,
+        roles: userMeta.roles,
+        is_super_admin: Boolean(userMeta.is_super_admin),
+        token: inMemoryAccessToken,
+      };
+      currentUser = user;
+      return user;
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("Restore session error:", err);
+    return null;
+  }
+}
+
+export async function clearSession(): Promise<void> {
+  // Call backend logout endpoint
+  if (inMemoryAccessToken) {
+    fetch(`${AUTH_URL}/api/auth/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${inMemoryAccessToken}`,
+      },
+    }).catch(() => {});
+  }
+
+  // Clear in-memory token state
+  inMemoryAccessToken = null;
+  currentUser = null;
+
+  // Clear hardware-backed Keystore / Keychain
+  try {
+    await SecureStore.deleteItemAsync(SECURE_REFRESH_TOKEN_KEY);
+  } catch {}
+  try {
+    await SecureStore.deleteItemAsync(SECURE_USER_META_KEY);
+  } catch {}
+}
+
+// ── Authenticated Fetch with Auto-Refresh on 401 ────────────────────────────
+
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = { ...options.headers } as Record<string, string>;
+  if (inMemoryAccessToken) {
+    headers["Authorization"] = `Bearer ${inMemoryAccessToken}`;
+  }
+  options.headers = headers;
+
+  let res = await fetch(url, options);
+
+  // If 401 Unauthorized, automatically attempt refresh once
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed && inMemoryAccessToken) {
+      headers["Authorization"] = `Bearer ${inMemoryAccessToken}`;
+      options.headers = headers;
+      res = await fetch(url, options);
+    }
+  }
+
+  return res;
 }
 
 // ── Authentication ──────────────────────────────────────────────────────────
@@ -59,41 +244,55 @@ export async function loginWithCredentials(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password: pass }),
     });
+
     if (res.ok) {
       const data = await res.json();
-      const roles: string[] = data.roles || [];
-      const isAdmin = roles.some(
-        (r) =>
-          r.toUpperCase().includes("ADMIN") ||
-          r.toUpperCase().includes("MANAGER")
-      );
+      const roleStr = data.role ? String(data.role) : "";
+      const roles: string[] = Array.isArray(data.roles)
+        ? data.roles
+        : roleStr
+        ? [roleStr]
+        : [];
+      const isAdmin =
+        roles.some(
+          (r) =>
+            r.toUpperCase().includes("ADMIN") ||
+            r.toUpperCase().includes("MANAGER")
+        ) || roleStr.toUpperCase().includes("ADMIN");
+
       const user: User = {
-        id: data.user_id || data.id || 1,
+        id: data.userId || data.user_id || data.id || 1,
         email: data.email || email,
-        name: data.full_name || data.name || email.split("@")[0],
+        name: data.name || data.full_name || email.split("@")[0],
         roles,
         is_super_admin: isAdmin,
-        token: data.token || data.access_token || "mock-jwt-token",
+        token: data.token || data.access_token || "jwt-token-" + Date.now(),
       };
-      setCurrentUser(user);
-      return user;
-    }
-  } catch (e) {
-    console.warn("Direct auth call failed, using client credentials mode:", e);
-  }
 
-  // Fallback demo / offline login credentials
-  const isAdmin = email.toLowerCase().includes("admin");
-  const user: User = {
-    id: isAdmin ? 99 : 101,
-    email,
-    name: email.split("@")[0].toUpperCase(),
-    roles: isAdmin ? ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] : ["ROLE_USER"],
-    is_super_admin: isAdmin,
-    token: "demo-jwt-token-" + Date.now(),
-  };
-  setCurrentUser(user);
-  return user;
+      // Persist session: in-memory access token + Keychain/Keystore refresh token
+      await saveSession(user, data.refreshToken);
+      return user;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Tài khoản hoặc mật khẩu không chính xác");
+    }
+  } catch (e: any) {
+    if (e.message?.includes("không chính xác")) {
+      throw e;
+    }
+    console.warn("Auth service unavailable, falling back to local credentials mode:", e);
+    const isAdmin = email.toLowerCase().includes("admin");
+    const user: User = {
+      id: isAdmin ? 99 : 101,
+      email,
+      name: email.split("@")[0].toUpperCase(),
+      roles: isAdmin ? ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] : ["ROLE_USER"],
+      is_super_admin: isAdmin,
+      token: "demo-jwt-token-" + Date.now(),
+    };
+    await saveSession(user, "demo-refresh-token-" + Date.now());
+    return user;
+  }
 }
 
 export async function loginWithGoogle(mockEmail?: string): Promise<User> {
@@ -106,7 +305,7 @@ export async function loginWithGoogle(mockEmail?: string): Promise<User> {
     is_super_admin: false,
     token: "demo-google-oauth-token-" + Date.now(),
   };
-  setCurrentUser(user);
+  await saveSession(user, "demo-google-refresh-token-" + Date.now());
   return user;
 }
 
@@ -114,7 +313,7 @@ export async function loginWithGoogle(mockEmail?: string): Promise<User> {
 
 export async function fetchUserOrganizations(): Promise<UserOrgsResponse> {
   try {
-    const res = await fetch(`${BASE_URL}/user/organizations`, {
+    const res = await authFetch(`${BASE_URL}/user/organizations`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -152,7 +351,7 @@ export async function fetchUserOrganizations(): Promise<UserOrgsResponse> {
 
 export async function fetchRooms(orgId: number = 1): Promise<Room[]> {
   try {
-    const res = await fetch(`${BASE_URL}/orgs/${orgId}/rooms`, {
+    const res = await authFetch(`${BASE_URL}/orgs/${orgId}/rooms`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -205,7 +404,7 @@ export async function startDutyShift(
   const duty_staff_name = staff?.name || currentUser?.name || "Duty Staff";
   const duty_staff_email = staff?.email || currentUser?.email || "";
 
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/shift/start`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/shift/start`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -222,7 +421,7 @@ export async function startDutyShift(
 
 export async function endDutyShift(roomId: string): Promise<any> {
   const duty_staff_id = currentUser ? String(currentUser.id) : "";
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/shift/end`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/shift/end`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ duty_staff_id }),
@@ -237,7 +436,7 @@ export async function fetchCurrentShift(
   roomId: string
 ): Promise<{ has_active_shift: boolean; shift?: DutyShiftRecord }> {
   try {
-    const res = await fetch(`${BASE_URL}/rooms/${roomId}/shift/current`, {
+    const res = await authFetch(`${BASE_URL}/rooms/${roomId}/shift/current`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) return { has_active_shift: false };
@@ -256,7 +455,7 @@ export async function performCheckIn(
   const scanner_id = currentUser ? String(currentUser.id) : "";
   const scanner_name = currentUser?.name || currentUser?.email || "Duty Staff";
 
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/checkin`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/checkin`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -280,7 +479,7 @@ export async function performCheckOut(
   roomId: string,
   studentId: string
 ): Promise<CheckOutResult> {
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/checkout`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/checkout`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -298,7 +497,7 @@ export async function performCheckOut(
 }
 
 export async function fetchOccupancy(roomId: string): Promise<Occupant[]> {
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/occupancy`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/occupancy`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -314,7 +513,7 @@ export async function generateQRToken(
   studentId: string,
   studentName: string
 ): Promise<{ payload: string; expires_at: string }> {
-  const res = await fetch(`${BASE_URL}/qr/generate`, {
+  const res = await authFetch(`${BASE_URL}/qr/generate`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ student_id: studentId, student_name: studentName }),
@@ -330,7 +529,7 @@ export async function performQRCheckin(
   const scanner_id = currentUser ? String(currentUser.id) : "";
   const scanner_name = currentUser?.name || currentUser?.email || "Duty Staff";
 
-  const res = await fetch(`${BASE_URL}/rooms/${roomId}/checkin-qr`, {
+  const res = await authFetch(`${BASE_URL}/rooms/${roomId}/checkin-qr`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -350,7 +549,7 @@ export async function performQRCheckin(
 // ── Super Admin Flow (Bottom-up System Inspection) ──────────────────────────
 
 export async function fetchInspectionHierarchy(): Promise<InspectionOrgNode[]> {
-  const res = await fetch(`${BASE_URL}/admin/inspection/hierarchy`, {
+  const res = await authFetch(`${BASE_URL}/admin/inspection/hierarchy`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error(`Failed to fetch hierarchy: HTTP ${res.status}`);
@@ -361,7 +560,7 @@ export async function fetchInspectionHierarchy(): Promise<InspectionOrgNode[]> {
 export async function fetchPresenceHistory(
   roomId: string
 ): Promise<PresenceHistoryItem[]> {
-  const res = await fetch(
+  const res = await authFetch(
     `${BASE_URL}/admin/rooms/${roomId}/presence-history`,
     {
       headers: getAuthHeaders(),
@@ -375,7 +574,7 @@ export async function fetchPresenceHistory(
 export async function fetchDutyHistory(
   roomId: string
 ): Promise<DutyShiftRecord[]> {
-  const res = await fetch(`${BASE_URL}/admin/rooms/${roomId}/duty-history`, {
+  const res = await authFetch(`${BASE_URL}/admin/rooms/${roomId}/duty-history`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error(`Failed to fetch duty history: HTTP ${res.status}`);
