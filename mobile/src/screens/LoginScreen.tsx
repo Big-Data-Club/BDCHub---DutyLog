@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar as RNStatusBar,
   Image,
   ScrollView,
   Alert,
@@ -29,7 +30,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
 
   const handleCredentialsLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setErrorMsg("Vui lòng nhập đầy đủ Email/Tài khoản và Mật khẩu");
+      setErrorMsg("Vui lòng nhập Email / MSSV và Mật khẩu");
       return;
     }
     setLoading(true);
@@ -52,7 +53,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
@@ -62,102 +63,69 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Top Header & Branding Section ──────────────────────────────── */}
-          <View style={styles.heroSection}>
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroBrandLeft}>
-                <View style={styles.clubLogoRow}>
-                  <Image
-                    source={require("../../assets/bdclogo.png")}
-                    style={styles.brandIcon}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.clubTitleCol}>
-                    <Text style={styles.clubMainName}>BIG DATA CLUB</Text>
-                    <Text style={styles.clubSubName}>HCMUT</Text>
-                  </View>
-                </View>
-
-                {/* Main Hero Title */}
-                <View style={styles.heroTitleRow}>
-                  <Text style={styles.titleBdc}>BDC </Text>
-                  <Text style={styles.titleHub}>HUB</Text>
-                </View>
-
-                {/* DutyLog Badge */}
-                <View style={styles.badgeRow}>
-                  <View style={styles.dutyLogPill}>
-                    <Text style={styles.dutyLogPillText}>DUTYLOG</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.taglineText}>
-                  KẾT NỐI  ·  HỌC HỎI  ·  PHÁT TRIỂN
-                </Text>
-              </View>
-
-              {/* 3D Tech Cloud / Server Platform Illustration */}
-              <View style={styles.cloudCardGraphic}>
-                <View style={styles.cloudCardInner}>
-                  <View style={styles.cloudNodeGlow} />
-                  <Text style={styles.cloudEmoji}>☁️</Text>
-                  <View style={styles.serverPlatformBase}>
-                    <View style={styles.serverPlatformTop} />
-                    <View style={styles.serverPlatformMid} />
-                    <View style={styles.serverPlatformBottom} />
-                  </View>
-                  <View style={styles.radarPill}>
-                    <View style={styles.radarPillDot} />
-                    <Text style={styles.radarPillText}>V1.0 LIVE</Text>
-                  </View>
-                </View>
+          {/* ── Centered Minimalist Header ───────────────────────────────── */}
+          <View style={styles.header}>
+            <Image
+              source={require("../../assets/bdclogo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.orgSubtitle}>BIG DATA CLUB · HCMUT</Text>
+            <View style={styles.brandRow}>
+              <Text style={styles.titleBdc}>BDC </Text>
+              <Text style={styles.titleHub}>HUB</Text>
+              <View style={styles.dutyPill}>
+                <Text style={styles.dutyPillText}>DUTYLOG</Text>
               </View>
             </View>
           </View>
 
-          {/* ── Main Authentication Card ────────────────────────────────────── */}
+          {/* ── Main Login Card ─────────────────────────────────────────── */}
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>XÁC THỰC ĐỊNH DANH</Text>
-              <Text style={styles.cardSubtitle}>
-                Vui lòng đăng nhập tài khoản hệ thống để bắt đầu ca trực
-              </Text>
-            </View>
+            <Text style={styles.cardTitle}>Đăng nhập</Text>
+            <Text style={styles.cardSubtitle}>
+              Nhập tài khoản hệ thống để bắt đầu ca trực
+            </Text>
 
             {/* Error Message */}
             {errorMsg ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorIcon}>⚠️</Text>
                 <Text style={styles.errorText}>{errorMsg}</Text>
               </View>
             ) : null}
 
-            {/* Field: Username / Email */}
+            {/* Input: Email / MSSV */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>👤  TÀI KHOẢN / EMAIL</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.fieldIcon}>✉️</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="VD: user@bdc.edu.vn hoặc MSSV"
-                  placeholderTextColor="#94A3B8"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  editable={!loading}
-                />
-              </View>
+              <Text style={styles.inputLabel}>Tài khoản / Email / MSSV</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="user@bdc.edu.vn hoặc MSSV"
+                placeholderTextColor="#94A3B8"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!loading}
+              />
             </View>
 
-            {/* Field: Password with Toggle Eye */}
+            {/* Input: Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>🔒  MẬT KHẨU</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.fieldIcon}>🔑</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Mật khẩu</Text>
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.togglePasswordText}>
+                    {showPassword ? "Ẩn" : "Hiện"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.passwordWrapper}>
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="Nhập mật khẩu của bạn"
+                  style={styles.passwordInput}
+                  placeholder="Nhập mật khẩu"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   value={password}
@@ -165,17 +133,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   autoCapitalize="none"
                   editable={!loading}
                 />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowPassword(!showPassword)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.eyeIcon}>{showPassword ? "👁️" : "🙈"}</Text>
-                </TouchableOpacity>
               </View>
             </View>
 
-            {/* Primary Action Button: Login */}
+            {/* Primary Submit Button */}
             <TouchableOpacity
               style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
               onPress={handleCredentialsLogin}
@@ -185,17 +146,14 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <View style={styles.btnContentRow}>
-                  <Text style={styles.primaryButtonText}>ĐĂNG NHẬP HỆ THỐNG</Text>
-                  <Text style={styles.btnArrow}>→</Text>
-                </View>
+                <Text style={styles.primaryButtonText}>Đăng nhập</Text>
               )}
             </TouchableOpacity>
 
-            {/* Divider */}
+            {/* Subtle Divider */}
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>HOẶC TIẾP TỤC VỚI</Text>
+              <Text style={styles.dividerText}>hoặc</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -208,68 +166,35 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               <View style={styles.googleIconBadge}>
                 <Text style={styles.googleIconText}>G</Text>
               </View>
-              <Text style={styles.googleButtonText}>Đăng nhập với Google OAuth</Text>
+              <Text style={styles.googleButtonText}>Đăng nhập với Google</Text>
             </TouchableOpacity>
           </View>
 
-          {/* ── Partner & Affiliation Logos Section (HCMUT · HPCC · BDC) ─── */}
-          <View style={styles.partnersSection}>
-            <Text style={styles.partnersTitle}>ĐƠN VỊ HỢP TÁC & PHÁT TRIỂN</Text>
-
-            <View style={styles.logosContainer}>
-              {/* 1. HCMUT Logo */}
-              <View style={styles.logoItem}>
-                <View style={styles.logoItemBadge}>
-                  <Image
-                    source={require("../../assets/hcmut.png")}
-                    style={styles.partnerLogoImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.partnerLogoLabel}>ĐH Bách Khoa</Text>
-                <Text style={styles.partnerLogoSub}>HCMUT</Text>
-              </View>
-
-              {/* Separator Dot */}
-              <View style={styles.logoSeparatorDot} />
-
-              {/* 2. HPCC Logo */}
-              <View style={styles.logoItem}>
-                <View style={styles.logoItemBadge}>
-                  <Image
-                    source={require("../../assets/hpcc-logo.png")}
-                    style={styles.partnerLogoImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.partnerLogoLabel}>Trung tâm HPCC</Text>
-                <Text style={styles.partnerLogoSub}>High Performance</Text>
-              </View>
-
-              {/* Separator Dot */}
-              <View style={styles.logoSeparatorDot} />
-
-              {/* 3. BDC Logo */}
-              <View style={styles.logoItem}>
-                <View style={styles.logoItemBadge}>
-                  <Image
-                    source={require("../../assets/bdclogo.png")}
-                    style={styles.partnerLogoImage}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.partnerLogoLabel}>Big Data Club</Text>
-                <Text style={styles.partnerLogoSub}>BDC Hub</Text>
-              </View>
+          {/* ── Compact Mini Partner Logos ───────────────────────────────── */}
+          <View style={styles.footerPartners}>
+            <Text style={styles.footerLabel}>HỆ THỐNG TRỰC THUỘC</Text>
+            <View style={styles.miniLogosRow}>
+              <Image
+                source={require("../../assets/hcmut.png")}
+                style={styles.miniLogoHcmut}
+                resizeMode="contain"
+              />
+              <View style={styles.miniLogoDivider} />
+              <Image
+                source={require("../../assets/hpcc-logo.png")}
+                style={styles.miniLogoHpcc}
+                resizeMode="contain"
+              />
+              <View style={styles.miniLogoDivider} />
+              <Image
+                source={require("../../assets/bdclogo.png")}
+                style={styles.miniLogoBdc}
+                resizeMode="contain"
+              />
             </View>
-
-            {/* Security Guarantee Footnote */}
-            <View style={styles.securityFootnote}>
-              <Text style={styles.securityFootnoteIcon}>🛡️</Text>
-              <Text style={styles.securityFootnoteText}>
-                Phiên đăng nhập duy trì an toàn với phần cứng Keystore / Keychain
-              </Text>
-            </View>
+            <Text style={styles.footerSubtext}>
+              ĐH Bách Khoa · HPCC · Big Data Club
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -278,316 +203,188 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
   },
   keyboardAvoid: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "ios" ? 10 : 25,
-    paddingBottom: 35,
-  },
-
-  // ── Hero Section ──────────────────────────────────────────────────────────
-  heroSection: {
-    marginBottom: 20,
-    marginTop: 10,
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  heroBrandLeft: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  clubLogoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-    gap: 8,
-  },
-  brandIcon: {
-    width: 36,
-    height: 36,
-  },
-  clubTitleCol: {
+    paddingHorizontal: 22,
+    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight || 24) + 16 : 14,
+    paddingBottom: 24,
+    minHeight: "100%",
     justifyContent: "center",
   },
-  clubMainName: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#0F2B5C",
-    letterSpacing: 0.8,
-  },
-  clubSubName: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-    letterSpacing: 1.5,
-  },
-  heroTitleRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 4,
-  },
-  titleBdc: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#0F172A",
-    letterSpacing: -1,
-  },
-  titleHub: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#2563EB",
-    letterSpacing: -1,
-  },
-  badgeRow: {
-    flexDirection: "row",
+
+  // ── Centered Header ───────────────────────────────────────────────────────
+  header: {
     alignItems: "center",
+    marginBottom: 24,
+  },
+  logo: {
+    width: 52,
+    height: 52,
     marginBottom: 10,
   },
-  dutyLogPill: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dutyLogPillText: {
+  orgSubtitle: {
     fontSize: 11,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1.2,
-  },
-  taglineText: {
-    fontSize: 10.5,
     fontWeight: "700",
     color: "#64748B",
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
+    marginBottom: 4,
   },
-
-  // ── 3D Tech Cloud Graphic ─────────────────────────────────────────────────
-  cloudCardGraphic: {
-    width: 110,
-    height: 115,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "rgba(37, 99, 235, 0.15)",
-    padding: 8,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cloudCardInner: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-  },
-  cloudNodeGlow: {
-    position: "absolute",
-    top: 5,
-    width: 45,
-    height: 45,
-    borderRadius: 25,
-    backgroundColor: "rgba(37, 99, 235, 0.15)",
-  },
-  cloudEmoji: {
-    fontSize: 34,
-    marginBottom: 2,
-  },
-  serverPlatformBase: {
-    width: 70,
-    alignItems: "center",
-    marginTop: -2,
-    marginBottom: 6,
-  },
-  serverPlatformTop: {
-    width: 60,
-    height: 6,
-    backgroundColor: "#93C5FD",
-    borderRadius: 3,
-    marginBottom: 2,
-  },
-  serverPlatformMid: {
-    width: 68,
-    height: 6,
-    backgroundColor: "#60A5FA",
-    borderRadius: 3,
-    marginBottom: 2,
-  },
-  serverPlatformBottom: {
-    width: 74,
-    height: 8,
-    backgroundColor: "#2563EB",
-    borderRadius: 4,
-  },
-  radarPill: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(37, 99, 235, 0.1)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    gap: 4,
+    justifyContent: "center",
+    gap: 2,
   },
-  radarPillDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "#10B981",
+  titleBdc: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.5,
   },
-  radarPillText: {
-    fontSize: 8.5,
-    fontWeight: "800",
+  titleHub: {
+    fontSize: 28,
+    fontWeight: "900",
     color: "#2563EB",
-    letterSpacing: 0.5,
+    letterSpacing: -0.5,
+  },
+  dutyPill: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  dutyPillText: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.8,
   },
 
   // ── Main Card ─────────────────────────────────────────────────────────────
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 22,
     borderWidth: 1,
-    borderColor: "rgba(37, 99, 235, 0.08)",
+    borderColor: "rgba(226, 232, 240, 0.9)",
     shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
     marginBottom: 24,
   },
-  cardHeader: {
-    marginBottom: 20,
-  },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#0F2B5C",
-    letterSpacing: 0.5,
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.3,
   },
   cardSubtitle: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: "#64748B",
     marginTop: 4,
+    marginBottom: 18,
     lineHeight: 18,
   },
 
   errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  errorIcon: {
-    fontSize: 16,
+    borderColor: "#FECACA",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
   },
   errorText: {
-    flex: 1,
     color: "#DC2626",
     fontSize: 12.5,
     fontWeight: "600",
-    lineHeight: 17,
+    lineHeight: 16,
   },
 
   // ── Inputs ────────────────────────────────────────────────────────────────
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 16,
+  },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   inputLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#1E3A8A",
-    marginBottom: 8,
-    letterSpacing: 0.8,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 6,
   },
-  inputWrapper: {
+  togglePasswordText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563EB",
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.2,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  passwordWrapper: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",
     borderWidth: 1.2,
     borderColor: "#E2E8F0",
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    height: 52,
+    height: 48,
   },
-  fieldIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  textInput: {
+  passwordInput: {
     flex: 1,
-    color: "#0F172A",
     fontSize: 14,
-    fontWeight: "500",
-  },
-  eyeBtn: {
-    padding: 6,
-  },
-  eyeIcon: {
-    fontSize: 18,
+    color: "#0F172A",
   },
 
-  // ── Primary Button ────────────────────────────────────────────────────────
+  // ── Buttons ───────────────────────────────────────────────────────────────
   primaryButton: {
     backgroundColor: "#2563EB",
-    borderRadius: 14,
-    height: 52,
+    borderRadius: 12,
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 6,
-    marginBottom: 18,
+    marginTop: 4,
+    marginBottom: 16,
     shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   primaryButtonDisabled: {
-    opacity: 0.7,
-  },
-  btnContentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    opacity: 0.65,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  btnArrow: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 14.5,
+    fontWeight: "800",
   },
 
-  // ── Divider ───────────────────────────────────────────────────────────────
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   dividerLine: {
     flex: 1,
@@ -595,14 +392,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#E2E8F0",
   },
   dividerText: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     color: "#94A3B8",
-    fontSize: 10.5,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: "600",
   },
 
-  // ── Google Button ─────────────────────────────────────────────────────────
   googleButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -610,117 +405,71 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1.2,
     borderColor: "#E2E8F0",
-    borderRadius: 14,
-    height: 50,
-    gap: 10,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    borderRadius: 12,
+    height: 46,
+    gap: 8,
   },
   googleIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: "#FEF2F2",
     justifyContent: "center",
     alignItems: "center",
   },
   googleIconText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "900",
     color: "#EA4335",
   },
   googleButtonText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: "700",
     color: "#334155",
   },
 
-  // ── Partners & Logos Section ──────────────────────────────────────────────
-  partnersSection: {
+  // ── Compact Mini Logos Footer ─────────────────────────────────────────────
+  footerPartners: {
     alignItems: "center",
-    paddingTop: 4,
   },
-  partnersTitle: {
-    fontSize: 10.5,
+  footerLabel: {
+    fontSize: 9.5,
     fontWeight: "800",
     color: "#94A3B8",
-    letterSpacing: 1.2,
-    marginBottom: 16,
+    letterSpacing: 1,
+    marginBottom: 10,
   },
-  logosContainer: {
+  miniLogosRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    width: "100%",
-    paddingHorizontal: 10,
+    gap: 16,
+    marginBottom: 6,
   },
-  logoItem: {
-    alignItems: "center",
-    flex: 1,
+  miniLogoHcmut: {
+    width: 24,
+    height: 24,
+    opacity: 0.85,
   },
-  logoItemBadge: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.8)",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 8,
-    padding: 6,
+  miniLogoHpcc: {
+    width: 44,
+    height: 20,
+    opacity: 0.85,
   },
-  partnerLogoImage: {
-    width: "100%",
-    height: "100%",
+  miniLogoBdc: {
+    width: 24,
+    height: 24,
+    opacity: 0.85,
   },
-  partnerLogoLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#334155",
-    textAlign: "center",
+  miniLogoDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "#CBD5E1",
   },
-  partnerLogoSub: {
-    fontSize: 9.5,
+  footerSubtext: {
+    fontSize: 10.5,
     color: "#94A3B8",
     fontWeight: "600",
-    marginTop: 1,
-    textAlign: "center",
-  },
-  logoSeparatorDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#CBD5E1",
-    marginHorizontal: 4,
-    marginBottom: 26,
-  },
-
-  // ── Security Footnote ─────────────────────────────────────────────────────
-  securityFootnote: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 20,
-    backgroundColor: "rgba(37, 99, 235, 0.06)",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-    gap: 6,
-  },
-  securityFootnoteIcon: {
-    fontSize: 13,
-  },
-  securityFootnoteText: {
-    fontSize: 11,
-    color: "#2563EB",
-    fontWeight: "700",
   },
 });

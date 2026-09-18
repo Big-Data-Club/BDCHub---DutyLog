@@ -7,6 +7,7 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
+  ScrollView,
   Image,
   Platform,
   StatusBar as RNStatusBar,
@@ -253,51 +254,57 @@ export const OrgSelectionScreen: React.FC<Props> = ({
           ) : null}
         </View>
 
-        {/* ── Filter Pills (Practical DutyLog filters) ───────────────────── */}
-        <View style={styles.filterPillsRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "ALL" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("ALL")}
-            activeOpacity={0.8}
+        {/* ── Filter Pills Row (Horizontal Scroll, No Overflow) ─────────── */}
+        <View style={styles.filterPillsWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterPillsScroll}
           >
-            <Text style={styles.filterPillIcon}>▦</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "ALL" && styles.filterPillTextActive]}>
-              Tất cả
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "ALL" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("ALL")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>▦</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "ALL" && styles.filterPillTextActive]}>
+                Tất cả
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "HAS_ROOMS" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("HAS_ROOMS")}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.filterDot, { backgroundColor: "#10B981" }]} />
-            <Text style={[styles.filterPillText, selectedFilter === "HAS_ROOMS" && styles.filterPillTextActive]}>
-              Có phòng trực
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "HAS_ROOMS" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("HAS_ROOMS")}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.filterDot, { backgroundColor: "#10B981" }]} />
+              <Text style={[styles.filterPillText, selectedFilter === "HAS_ROOMS" && styles.filterPillTextActive]}>
+                Có phòng trực
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "MANAGED" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("MANAGED")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.filterPillIcon}>⚡</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "MANAGED" && styles.filterPillTextActive]}>
-              Quản lý / Admin
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "MANAGED" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("MANAGED")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>⚡</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "MANAGED" && styles.filterPillTextActive]}>
+                Quản lý / Admin
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "MEMBER" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("MEMBER")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.filterPillIcon}>👥</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "MEMBER" && styles.filterPillTextActive]}>
-              Thành viên
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "MEMBER" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("MEMBER")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>👥</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "MEMBER" && styles.filterPillTextActive]}>
+                Thành viên
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* ── Organizations List ─────────────────────────────────────────── */}
@@ -652,10 +659,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Filter Pills Row ──────────────────────────────────────────────────────
-  filterPillsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 18,
+  filterPillsWrapper: {
     marginBottom: 14,
+  },
+  filterPillsScroll: {
+    paddingHorizontal: 18,
     gap: 8,
   },
   filterPill: {
@@ -749,6 +757,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 1,
+    marginRight: 6,
   },
   slugText: {
     fontSize: 9.5,
@@ -760,6 +770,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 0,
   },
   roleBadgeMember: {
     flexDirection: "row",

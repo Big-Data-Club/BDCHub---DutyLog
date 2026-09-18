@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View, ActivityIndicator, Text, Image } from "react-native";
+import {
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  Text,
+  Image,
+  BackHandler,
+} from "react-native";
 import { Room, Organization, User } from "./src/types";
 import {
   fetchRooms,
@@ -36,6 +43,45 @@ export default function App() {
   const [scannerMode, setScannerMode] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
   const [loading, setLoading] = useState(false);
   const [restoringSession, setRestoringSession] = useState(true);
+
+  // ── Hardware & Gesture Back Button Handling for Android ──────────────────
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      if (currentScreen === "DUTY_STATION") {
+        reloadRooms();
+        setCurrentScreen("ROOMS");
+        return true;
+      }
+      if (currentScreen === "ROOMS") {
+        setCurrentScreen("ORG_SELECT");
+        return true;
+      }
+      if (currentScreen === "SCAN" || currentScreen === "QR_DISPLAY") {
+        reloadRooms();
+        setCurrentScreen("DUTY_STATION");
+        return true;
+      }
+      if (currentScreen === "ADMIN_INSPECTION") {
+        if (selectedRoom) {
+          setCurrentScreen("DUTY_STATION");
+        } else if (selectedOrg) {
+          setCurrentScreen("ROOMS");
+        } else {
+          setCurrentScreen("ORG_SELECT");
+        }
+        return true;
+      }
+      // If at ORG_SELECT or LOGIN, do not intercept, let Android perform default action
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleHardwareBack
+    );
+
+    return () => backHandler.remove();
+  }, [currentScreen, selectedOrg, selectedRoom]);
 
   // ── Session Restoration on Cold App Startup (Silent Refresh) ─────────────
   useEffect(() => {

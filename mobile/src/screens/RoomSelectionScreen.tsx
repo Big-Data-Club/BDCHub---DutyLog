@@ -7,6 +7,7 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
+  ScrollView,
   Image,
   Platform,
   StatusBar as RNStatusBar,
@@ -181,50 +182,57 @@ export const RoomSelectionScreen: React.FC<Props> = ({
         </View>
 
         {/* ── Filter Pills for Rooms ─────────────────────────────────────── */}
-        <View style={styles.filterPillsRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "ALL" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("ALL")}
-            activeOpacity={0.8}
+        {/* ── Filter Pills for Rooms (Horizontal Scroll, No Overflow) ────── */}
+        <View style={styles.filterPillsWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterPillsScroll}
           >
-            <Text style={styles.filterPillIcon}>▦</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "ALL" && styles.filterPillTextActive]}>
-              Tất cả ({rooms.length})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "ALL" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("ALL")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>▦</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "ALL" && styles.filterPillTextActive]}>
+                Tất cả ({rooms.length})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "CS1" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("CS1")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.filterPillIcon}>📍</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "CS1" && styles.filterPillTextActive]}>
-              Cơ sở 1
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "CS1" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("CS1")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>📍</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "CS1" && styles.filterPillTextActive]}>
+                Cơ sở 1
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "CS2" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("CS2")}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.filterPillIcon}>📍</Text>
-            <Text style={[styles.filterPillText, selectedFilter === "CS2" && styles.filterPillTextActive]}>
-              Cơ sở 2
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "CS2" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("CS2")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterPillIcon}>📍</Text>
+              <Text style={[styles.filterPillText, selectedFilter === "CS2" && styles.filterPillTextActive]}>
+                Cơ sở 2
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, selectedFilter === "AVAILABLE" && styles.filterPillActive]}
-            onPress={() => setSelectedFilter("AVAILABLE")}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.filterDot, { backgroundColor: "#10B981" }]} />
-            <Text style={[styles.filterPillText, selectedFilter === "AVAILABLE" && styles.filterPillTextActive]}>
-              Còn chỗ
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, selectedFilter === "AVAILABLE" && styles.filterPillActive]}
+              onPress={() => setSelectedFilter("AVAILABLE")}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.filterDot, { backgroundColor: "#10B981" }]} />
+              <Text style={[styles.filterPillText, selectedFilter === "AVAILABLE" && styles.filterPillTextActive]}>
+                Còn chỗ ({rooms.filter(r => (r.current_occupancy || 0) < (r.capacity || 30)).length})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* ── Rooms List ─────────────────────────────────────────────────── */}
@@ -259,8 +267,8 @@ export const RoomSelectionScreen: React.FC<Props> = ({
                   {/* Top Row: Slug + Capacity Badge + Chevron */}
                   <View style={styles.cardHeaderRow}>
                     <View style={styles.slugBadge}>
-                      <Text style={styles.slugText}>
-                        PHÒNG #{item.id} · TÒA {item.building}
+                      <Text style={styles.slugText} numberOfLines={1}>
+                        TÒA {item.building} · P.{item.room_number}
                       </Text>
                     </View>
                     <View style={styles.roleAndArrowRow}>
@@ -298,7 +306,7 @@ export const RoomSelectionScreen: React.FC<Props> = ({
                             },
                           ]}
                         >
-                          {occupancy}/{capacity} người ({percent}%)
+                          {occupancy}/{capacity} ({percent}%)
                         </Text>
                       </View>
                       <Text style={styles.chevronArrow}>›</Text>
@@ -641,10 +649,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Filter Pills Row ──────────────────────────────────────────────────────
-  filterPillsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 18,
+  filterPillsWrapper: {
     marginBottom: 14,
+  },
+  filterPillsScroll: {
+    paddingHorizontal: 18,
     gap: 8,
   },
   filterPill: {
@@ -695,7 +704,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: "rgba(226, 232, 240, 0.9)",
     shadowColor: "#0F2B5C",
@@ -703,16 +713,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
-    gap: 14,
+    gap: 12,
   },
   cardSelected: {
     borderColor: "#2563EB",
     borderWidth: 1.5,
   },
   roomIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -728,38 +738,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF2F2",
   },
   roomIconEmoji: {
-    fontSize: 24,
+    fontSize: 22,
   },
   cardBody: {
     flex: 1,
+    overflow: "hidden",
   },
   cardHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 4,
+    width: "100%",
   },
   slugBadge: {
     backgroundColor: "rgba(37, 99, 235, 0.08)",
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 1,
+    marginRight: 6,
   },
   slugText: {
     fontSize: 9.5,
     fontWeight: "800",
     color: "#2563EB",
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   roleAndArrowRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
+    flexShrink: 0,
   },
   occupancyBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2.5,
     borderRadius: 8,
     gap: 4,
@@ -781,13 +796,15 @@ const styles = StyleSheet.create({
   occupancyText: {
     fontSize: 9.5,
     fontWeight: "800",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   chevronArrow: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#94A3B8",
-    fontWeight: "600",
-    lineHeight: 18,
+    fontWeight: "700",
+    lineHeight: 16,
+    marginRight: 2,
+    marginLeft: 2,
   },
   roomName: {
     fontSize: 16,
