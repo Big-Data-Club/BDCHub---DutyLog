@@ -808,16 +808,24 @@ export async function fetchInspectionHierarchy(): Promise<InspectionOrgNode[]> {
 }
 
 export async function fetchPresenceHistory(
-  roomId: string
+  roomId: string,
+  limit: number = 20,
+  offset: number = 0
 ): Promise<PresenceHistoryItem[]> {
   try {
-    let res = await authFetch(`${BASE_URL}/rooms/${roomId}/presence-history`, {
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) {
-      res = await authFetch(`${BASE_URL}/admin/rooms/${roomId}/presence-history`, {
+    let res = await authFetch(
+      `${BASE_URL}/rooms/${roomId}/presence-history?limit=${limit}&offset=${offset}`,
+      {
         headers: getAuthHeaders(),
-      });
+      }
+    );
+    if (!res.ok) {
+      res = await authFetch(
+        `${BASE_URL}/admin/rooms/${roomId}/presence-history?limit=${limit}&offset=${offset}`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
     }
     if (res.ok) {
       const data = await res.json();
@@ -836,16 +844,24 @@ export async function fetchPresenceHistory(
 }
 
 export async function fetchDutyHistory(
-  roomId: string
+  roomId: string,
+  limit: number = 20,
+  offset: number = 0
 ): Promise<DutyShiftRecord[]> {
   try {
-    let res = await authFetch(`${BASE_URL}/rooms/${roomId}/duty-history`, {
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) {
-      res = await authFetch(`${BASE_URL}/admin/rooms/${roomId}/duty-history`, {
+    let res = await authFetch(
+      `${BASE_URL}/rooms/${roomId}/duty-history?limit=${limit}&offset=${offset}`,
+      {
         headers: getAuthHeaders(),
-      });
+      }
+    );
+    if (!res.ok) {
+      res = await authFetch(
+        `${BASE_URL}/admin/rooms/${roomId}/duty-history?limit=${limit}&offset=${offset}`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
     }
     if (res.ok) {
       const data = await res.json();
