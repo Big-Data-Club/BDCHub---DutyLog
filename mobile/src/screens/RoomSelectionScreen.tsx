@@ -14,6 +14,7 @@ import {
   Alert,
 } from "react-native";
 import { Room, Organization, User } from "../types";
+import { resolveDisplayName } from "../api/client";
 
 interface Props {
   user: User;
@@ -41,10 +42,12 @@ export const RoomSelectionScreen: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<RoomFilterType>("ALL");
 
+  const displayName = resolveDisplayName(user.name, user.email);
+
   const handleUserProfilePress = () => {
     Alert.alert(
       "Tài khoản định danh",
-      `Người dùng: ${user.name || user.email}\nVai trò: ${user.roles.join(", ") || "Thành viên"}\n\nTính năng cấu hình tài khoản, mã vạch và mã QR cá nhân đang trong giai đoạn phát triển, vui lòng thử lại sau.`
+      `Họ và tên: ${displayName}\nEmail: ${user.email}\nVai trò: ${user.roles.join(", ") || "Thành viên"}\n\nTính năng cấu hình tài khoản, mã vạch và mã QR cá nhân đang trong giai đoạn phát triển, vui lòng thử lại sau.`
     );
   };
 
@@ -114,7 +117,7 @@ export const RoomSelectionScreen: React.FC<Props> = ({
           >
             <View style={styles.userAvatarCircle}>
               <Text style={styles.userAvatarText}>
-                {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
             <View style={styles.userActiveDot} />

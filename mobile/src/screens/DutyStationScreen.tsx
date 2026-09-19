@@ -28,6 +28,7 @@ import {
   fetchCurrentShift,
   fetchPresenceHistory,
   fetchDutyHistory,
+  resolveDisplayName,
 } from "../api/client";
 
 interface Props {
@@ -41,6 +42,16 @@ interface Props {
   onNavigateToInspection?: () => void;
 }
 
+export interface ActivityLogItem {
+  id: string;
+  type: "SHIFT_START" | "SHIFT_END" | "CHECK_IN" | "CHECK_OUT";
+  title: string;
+  subtitle: string;
+  timestamp: string;
+  badge: string;
+  badgeStyle: "success" | "danger" | "info" | "neutral";
+}
+
 export const DutyStationScreen: React.FC<Props> = ({
   user,
   organization,
@@ -52,18 +63,21 @@ export const DutyStationScreen: React.FC<Props> = ({
   onNavigateToInspection,
 }) => {
   const [scanType, setScanType] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
-  const [activeTab, setActiveTab] = useState<"HISTORY" | "OCCUPANTS" | "SHIFTS">("HISTORY");
+  const [activeTab, setActiveTab] = useState<"LOGS" | "OCCUPANTS" | "SHIFTS">("LOGS");
 
   // Data states
   const [occupants, setOccupants] = useState<Occupant[]>([]);
   const [presenceHistory, setPresenceHistory] = useState<PresenceHistoryItem[]>([]);
   const [dutyHistory, setDutyHistory] = useState<DutyShiftRecord[]>([]);
   const [activeShift, setActiveShift] = useState<DutyShiftRecord | null>(null);
+  const [localActivityLogs, setLocalActivityLogs] = useState<ActivityLogItem[]>([]);
 
   // Loading states
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [shiftDurationSeconds, setShiftDurationSeconds] = useState(0);
+
+  const displayName = resolveDisplayName(user.name, user.email);
 
   useEffect(() => {
     loadStationData();
@@ -105,6 +119,79 @@ export const DutyStationScreen: React.FC<Props> = ({
       setOccupants(occList);
       setPresenceHistory(histList);
       setDutyHistory(shiftsList);
+
+      // Build unified chronological activity log feed
+      const logs: ActivityLogItem[] = [];
+
+      // 1. Shift events
+      shiftsList.forEach((s) => {
+        const sTime = new Date(s.start_time).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        logs.push({
+          id: `shift-start-${s.id}`,
+          type: "SHIFT_START",
+          title: `${resolveDisplayName(s.duty_staff_name, s.duty_staff_email)} bắt đầu ca trực`,
+          subtitle: `Phiên trực trạm ${room.name}`,
+          timestamp: sTime,
+          badge: "Bắt đầu trực",
+          badgeStyle: "success",
+        });
+        if (s.end_time) {
+          const eTime = new Date(s.end_time).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const mins = Math.round((s.duration_seconds || 0) / 60);
+          logs.push({
+            id: `shift-end-${s.id}`,
+            type: "SHIFT_END",
+            title: `${resolveDisplayName(s.duty_staff_name, s.duty_staff_email)} kết thúc ca trực`,
+            subtitle: `Thời lượng trực: ${mins} phút`,
+            timestamp: eTime,
+            badge: "Hoàn tất ca",
+            badgeStyle: "neutral",
+          });
+        }
+      });
+
+      // 2. Presence events (check-in / check-out)
+      histList.forEach((p) => {
+        const inTime = new Date(p.check_in_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        logs.push({
+          id: `checkin-${p.id}`,
+          type: "CHECK_IN",
+          title: `${p.student_name} (${p.student_id})`,
+          subtitle: `Quét bởi: ${resolveDisplayName(p.scanner_name)}`,
+          timestamp: inTime,
+          badge: p.is_valid_member ? "Hợp lệ" : "Ngoài tổ chức",
+          badgeStyle: p.is_valid_member ? "success" : "danger",
+        });
+
+        if (p.check_out_at) {
+          const outTime = new Date(p.check_out_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          logs.push({
+            id: `checkout-${p.id}`,
+            type: "CHECK_OUT",
+            title: `${p.student_name} (${p.student_id}) check-out`,
+            subtitle: `Thời gian ở lại: ${Math.round((p.duration_seconds || 0) / 60)} phút`,
+            timestamp: outTime,
+            badge: "Rời phòng",
+            badgeStyle: "neutral",
+          });
+        }
+      });
+
+      setLocalActivityLogs(logs);
     } catch (e) {
       console.warn("Failed to load station data:", e);
     } finally {
@@ -117,12 +204,27 @@ export const DutyStationScreen: React.FC<Props> = ({
     try {
       const shift = await startDutyShift(room.id, {
         id: String(user.id),
-        name: user.name,
+        name: displayName,
         email: user.email,
       });
       setActiveShift(shift);
-      loadStationData();
-      Alert.alert("Ca trực đã kích hoạt", `Chào ${user.name}, ca trực tại ${room.name} đã được bắt đầu.`);
+
+      // Immediately append to local activity logs
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const newEntry: ActivityLogItem = {
+        id: `shift-live-${Date.now()}`,
+        type: "SHIFT_START",
+        title: `${displayName} bắt đầu ca trực`,
+        subtitle: `Phiên trực trạm ${room.name}`,
+        timestamp: timeStr,
+        badge: "Bắt đầu trực",
+        badgeStyle: "success",
+      };
+      setLocalActivityLogs((prev) => [newEntry, ...prev]);
+
+      await loadStationData();
+      Alert.alert("Ca trực đã bắt đầu", `Chào ${displayName}, phiên trực tại ${room.name} đã được ghi nhận lúc ${timeStr}.`);
     } catch (err: any) {
       Alert.alert("Lỗi", err.message || "Không thể bắt đầu ca trực");
     } finally {
@@ -144,9 +246,23 @@ export const DutyStationScreen: React.FC<Props> = ({
             try {
               const res = await endDutyShift(room.id);
               setActiveShift(null);
-              loadStationData();
-              const mins = res.duration_seconds ? Math.round(res.duration_seconds / 60) : 0;
-              Alert.alert("Đã kết thúc ca trực", `Tổng thời gian trực: ${mins} phút. Dữ liệu đã được lưu thành công.`);
+
+              const now = new Date();
+              const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+              const mins = res.duration_seconds ? Math.round(res.duration_seconds / 60) : 1;
+              const endEntry: ActivityLogItem = {
+                id: `shift-end-${Date.now()}`,
+                type: "SHIFT_END",
+                title: `${displayName} kết thúc ca trực`,
+                subtitle: `Thời lượng trực: ${mins} phút`,
+                timestamp: timeStr,
+                badge: "Hoàn tất ca",
+                badgeStyle: "neutral",
+              };
+              setLocalActivityLogs((prev) => [endEntry, ...prev]);
+
+              await loadStationData();
+              Alert.alert("Hoàn tất ca trực", `Đã lưu nhật ký ca trực của ${displayName}. Tổng thời gian: ${mins} phút.`);
             } catch (err: any) {
               Alert.alert("Lỗi", err.message || "Không thể kết thúc ca trực");
             } finally {
@@ -170,7 +286,7 @@ export const DutyStationScreen: React.FC<Props> = ({
   const handleUserProfilePress = () => {
     Alert.alert(
       "Tài khoản định danh",
-      `Người dùng: ${user.name || user.email}\nVai trò: ${user.roles.join(", ") || "Thành viên"}\nPhòng trực: ${room.name}\n\nTính năng cấu hình tài khoản cá nhân đang trong giai đoạn phát triển, vui lòng thử lại sau.`
+      `Họ và tên: ${displayName}\nEmail: ${user.email}\nVai trò: ${user.roles.join(", ") || "Thành viên"}\nPhòng trực: ${room.name}\n\nTính năng cấu hình tài khoản cá nhân đang trong giai đoạn phát triển, vui lòng thử lại sau.`
     );
   };
 
@@ -193,9 +309,9 @@ export const DutyStationScreen: React.FC<Props> = ({
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* ── Top Navigation Bar ─────────────────────────────────────────── */}
+        {/* ── Minimalist Executive Top Bar ───────────────────────────────── */}
         <View style={styles.topBar}>
-          {/* Prominent Back Button to return to Room Selection */}
+          {/* Back button to Room Selection */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={onBackToRooms}
@@ -205,33 +321,26 @@ export const DutyStationScreen: React.FC<Props> = ({
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
 
-          {/* Center Info: Logo, Room code/building, Room name */}
+          {/* Center Info: Building tag, Org, Room name */}
           <View style={styles.topBarCenter}>
             <View style={styles.brandRow}>
-              <Image
-                source={require("../../assets/bdclogo.png")}
-                style={styles.miniLogo}
-                resizeMode="contain"
-              />
-              <View style={styles.roomTagRow}>
-                <Text style={styles.buildingTagBadge}>{buildingTag}</Text>
-                <Text style={styles.orgSlugBadge}>{organization.slug.toUpperCase()}</Text>
-              </View>
+              <Text style={styles.buildingTagBadge}>{buildingTag}</Text>
+              <Text style={styles.orgSlugBadge}>{organization.slug.toUpperCase()}</Text>
             </View>
             <Text style={styles.roomNameText} numberOfLines={1}>
               {room.name}
             </Text>
           </View>
 
-          {/* Right Action Icons: Admin, QR, User Avatar */}
+          {/* Right Actions: QR, Admin, User Initial */}
           <View style={styles.topBarRight}>
             {user.is_super_admin && onNavigateToInspection && (
               <TouchableOpacity
-                style={styles.superAdminBtn}
+                style={styles.adminBtn}
                 onPress={onNavigateToInspection}
                 activeOpacity={0.8}
               >
-                <Text style={styles.superAdminBtnText}>🛡️</Text>
+                <Text style={styles.adminBtnText}>Admin</Text>
               </TouchableOpacity>
             )}
 
@@ -240,8 +349,7 @@ export const DutyStationScreen: React.FC<Props> = ({
               onPress={onOpenPersonalQR}
               activeOpacity={0.8}
             >
-              <Text style={styles.personalQRIcon}>📱</Text>
-              <Text style={styles.personalQRText}>QR</Text>
+              <Text style={styles.personalQRText}>Mã QR</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -251,7 +359,7 @@ export const DutyStationScreen: React.FC<Props> = ({
             >
               <View style={styles.userAvatarCircle}>
                 <Text style={styles.userAvatarText}>
-                  {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                  {displayName.charAt(0).toUpperCase()}
                 </Text>
               </View>
               <View style={styles.userActiveDot} />
@@ -264,45 +372,38 @@ export const DutyStationScreen: React.FC<Props> = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Status HUD / Shift Card ───────────────────────────────────── */}
+          {/* ── Executive Shift Status HUD ─────────────────────────────────── */}
           <View style={[styles.hudCard, activeShift ? styles.hudCardActive : styles.hudCardIdle]}>
-            <View
-              style={[
-                styles.hudAccentStrip,
-                { backgroundColor: activeShift ? "#10B981" : "#CBD5E1" },
-              ]}
-            />
-
             <View style={styles.hudHeaderRow}>
-              <View style={styles.shiftStatusRow}>
+              <View style={styles.shiftStatusBadge}>
                 <View style={activeShift ? styles.statusDotActive : styles.statusDotIdle} />
                 <Text style={activeShift ? styles.statusTextActive : styles.statusTextIdle}>
-                  {activeShift ? "CA TRỰC ĐANG HOẠT ĐỘNG" : "CHƯA BẮT ĐẦU CA TRỰC"}
+                  {activeShift ? "CA TRỰC HOẠT ĐỘNG" : "CHƯA BẮT ĐẦU CA"}
                 </Text>
               </View>
 
               {activeShift && (
                 <View style={styles.timerBadge}>
-                  <Text style={styles.timerText}>⏱️ {formatTimer(shiftDurationSeconds)}</Text>
+                  <Text style={styles.timerText}>{formatTimer(shiftDurationSeconds)}</Text>
                 </View>
               )}
             </View>
 
-            <View style={styles.hudDetailsRow}>
-              <Text style={styles.hudStaffLabel}>
-                Người trực:{" "}
-                <Text style={styles.hudStaffValue}>
-                  {activeShift?.duty_staff_name || user.name}
+            <View style={styles.hudInfoRow}>
+              <View style={styles.hudInfoCol}>
+                <Text style={styles.hudLabel}>Nhân sự trực</Text>
+                <Text style={styles.hudValue} numberOfLines={1}>
+                  {activeShift ? resolveDisplayName(activeShift.duty_staff_name, activeShift.duty_staff_email) : displayName}
                 </Text>
-              </Text>
-              {activeShift ? (
-                <Text style={styles.hudTimeLabel}>
-                  Bắt đầu: {new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              ) : (
-                <Text style={styles.hudSubHint}>
-                  Kích hoạt ca trực để quản lý lượt điểm danh và ghi nhận phiên trực.
-                </Text>
+              </View>
+
+              {activeShift && (
+                <View style={styles.hudInfoColRight}>
+                  <Text style={styles.hudLabel}>Bắt đầu</Text>
+                  <Text style={styles.hudValue}>
+                    {new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
               )}
             </View>
 
@@ -317,7 +418,7 @@ export const DutyStationScreen: React.FC<Props> = ({
                 {actionLoading ? (
                   <ActivityIndicator color="#DC2626" size="small" />
                 ) : (
-                  <Text style={styles.endShiftBtnText}>⏹ KẾT THÚC CA TRỰC</Text>
+                  <Text style={styles.endShiftBtnText}>Kết thúc ca trực</Text>
                 )}
               </TouchableOpacity>
             ) : (
@@ -330,335 +431,277 @@ export const DutyStationScreen: React.FC<Props> = ({
                 {actionLoading ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.startShiftBtnText}>▶ BẮT ĐẦU CA TRỰC NGAY</Text>
+                  <Text style={styles.startShiftBtnText}>Bắt đầu ca trực ngay</Text>
                 )}
               </TouchableOpacity>
             )}
           </View>
 
-          {/* ── HERO SCAN STATION ("Bấm vô là quét", High-Tech Banking Style) ── */}
-          <View style={styles.heroScanCard}>
-            <View style={styles.heroHeaderRow}>
-              <View style={styles.heroTitleCol}>
-                <View style={styles.heroTagBadge}>
-                  <Text style={styles.heroTagBadgeText}>TRẠM ĐIỂM DANH HIỆN DIỆN</Text>
-                </View>
-                <Text style={styles.heroStationTitle}>Bấm để quét sinh viên</Text>
+          {/* ── Executive Scan Trigger Card ("Bấm vô là quét") ──────────────── */}
+          <View style={styles.scanCard}>
+            <View style={styles.scanCardHeader}>
+              <View>
+                <Text style={styles.scanCardTag}>TRẠM ĐIỂM DANH</Text>
+                <Text style={styles.scanCardTitle}>Quét thẻ sinh viên</Text>
               </View>
 
-              {/* Scan Type Toggle Pills */}
-              <View style={styles.scannerTypePills}>
+              {/* Minimalist segmented mode switch */}
+              <View style={styles.modeSegment}>
                 <TouchableOpacity
-                  style={[styles.typePill, scanType === "BARCODE" && styles.typePillActive]}
+                  style={[styles.segmentBtn, scanType === "BARCODE" && styles.segmentBtnActive]}
                   onPress={() => setScanType("BARCODE")}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.typePillText,
-                      scanType === "BARCODE" && styles.typePillTextActive,
-                    ]}
-                  >
-                    🏷️ Barcode
+                  <Text style={[styles.segmentText, scanType === "BARCODE" && styles.segmentTextActive]}>
+                    Mã vạch
                   </Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
-                  style={[styles.typePill, scanType === "QR_SCAN" && styles.typePillActive]}
+                  style={[styles.segmentBtn, scanType === "QR_SCAN" && styles.segmentBtnActive]}
                   onPress={() => setScanType("QR_SCAN")}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.typePillText,
-                      scanType === "QR_SCAN" && styles.typePillTextActive,
-                    ]}
-                  >
-                    🔳 Mã QR
+                  <Text style={[styles.segmentText, scanType === "QR_SCAN" && styles.segmentTextActive]}>
+                    Mã QR
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Central High-Tech Scanner Trigger Button */}
+            {/* High-end scan button */}
             <TouchableOpacity
-              style={styles.bigScanTrigger}
+              style={styles.scanActionBtn}
               onPress={() => onOpenScanner(scanType)}
               activeOpacity={0.88}
             >
-              <View style={styles.radarRingOuter}>
-                <View style={styles.radarRingInner}>
-                  <Text style={styles.scannerBigIcon}>
-                    {scanType === "BARCODE" ? "📷" : "⚡"}
-                  </Text>
-                </View>
+              <View style={styles.scanIconBox}>
+                <View style={styles.scanCrosshair} />
               </View>
-
-              <View style={styles.scanPromptTextContainer}>
-                <Text style={styles.scanPromptTitle}>
-                  {scanType === "BARCODE" ? "MỞ CAMERA QUÉT MÃ THẺ" : "MỞ CAMERA QUÉT MÃ QR"}
+              <View style={styles.scanActionTextCol}>
+                <Text style={styles.scanActionTitle}>
+                  {scanType === "BARCODE" ? "Mở máy quét mã vạch thẻ" : "Mở máy quét mã QR"}
                 </Text>
-                <Text style={styles.scanPromptDesc}>
-                  Tự động định danh · Kiểm tra quyền Org · Cảnh báo đỏ nếu không thuộc CLB
+                <Text style={styles.scanActionSubtitle}>
+                  Tự động kiểm tra quyền tổ chức và ghi nhận nhật ký
                 </Text>
               </View>
+              <Text style={styles.scanChevron}>›</Text>
             </TouchableOpacity>
           </View>
 
-          {/* ── High-Tech Metrics Row (Banking style) ──────────────────────── */}
+          {/* ── Compact Executive Metrics Row ──────────────────────────────── */}
           <View style={styles.metricsRow}>
-            {/* Metric 1: Live Occupancy */}
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>ĐANG TRONG PHÒNG</Text>
+              <Text style={styles.metricLabel}>HIỆN DIỆN</Text>
               <View style={styles.metricValueRow}>
-                <Text style={styles.metricValueLarge}>{currentCount}</Text>
+                <Text style={styles.metricValueBold}>{currentCount}</Text>
                 <Text style={styles.metricValueSub}>/ {capacity}</Text>
               </View>
-              <View style={styles.metricBarTrack}>
+              <View style={styles.metricProgressTrack}>
                 <View
                   style={[
-                    styles.metricBarFill,
+                    styles.metricProgressFill,
                     {
                       width: `${occupancyPercent}%`,
-                      backgroundColor: occupancyPercent > 80 ? "#EF4444" : "#2563EB",
+                      backgroundColor: occupancyPercent > 85 ? "#DC2626" : "#2563EB",
                     },
                   ]}
                 />
               </View>
             </View>
 
-            {/* Metric 2: Capacity Ratio */}
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>TỈ LỆ LẤP ĐẦY</Text>
               <View style={styles.metricValueRow}>
-                <Text style={styles.metricValueLarge}>{occupancyPercent}%</Text>
+                <Text style={styles.metricValueBold}>{occupancyPercent}%</Text>
               </View>
               <Text
                 style={[
-                  styles.metricFootnote,
-                  currentCount >= capacity && styles.metricFootnoteWarn,
+                  styles.metricStatusText,
+                  currentCount >= capacity && styles.metricStatusTextWarn,
                 ]}
               >
-                {currentCount >= capacity ? "⚠ Đạt giới hạn sức chứa" : "Phòng đang hoạt động tốt"}
+                {currentCount >= capacity ? "Đạt công suất tối đa" : "Phòng hoạt động bình thường"}
               </Text>
             </View>
           </View>
 
-          {/* ── Quick-Switch Segmented Control ─────────────────────────────── */}
-          <View style={styles.switchTabsContainer}>
+          {/* ── Clean Tab Segmented Control ─────────────────────────────────── */}
+          <View style={styles.tabsContainer}>
             <TouchableOpacity
-              style={[styles.switchTabBtn, activeTab === "HISTORY" && styles.switchTabBtnActive]}
-              onPress={() => setActiveTab("HISTORY")}
+              style={[styles.tabButton, activeTab === "LOGS" && styles.tabButtonActive]}
+              onPress={() => setActiveTab("LOGS")}
               activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.switchTabBtnText,
-                  activeTab === "HISTORY" && styles.switchTabBtnTextActive,
-                ]}
-              >
-                📋 Lịch sử quét
+              <Text style={[styles.tabButtonText, activeTab === "LOGS" && styles.tabButtonTextActive]}>
+                Nhật ký ({localActivityLogs.length})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.switchTabBtn, activeTab === "OCCUPANTS" && styles.switchTabBtnActive]}
+              style={[styles.tabButton, activeTab === "OCCUPANTS" && styles.tabButtonActive]}
               onPress={() => setActiveTab("OCCUPANTS")}
               activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.switchTabBtnText,
-                  activeTab === "OCCUPANTS" && styles.switchTabBtnTextActive,
-                ]}
-              >
-                👥 Hiện diện ({currentCount})
+              <Text style={[styles.tabButtonText, activeTab === "OCCUPANTS" && styles.tabButtonTextActive]}>
+                Hiện diện ({currentCount})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.switchTabBtn, activeTab === "SHIFTS" && styles.switchTabBtnActive]}
+              style={[styles.tabButton, activeTab === "SHIFTS" && styles.tabButtonActive]}
               onPress={() => setActiveTab("SHIFTS")}
               activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.switchTabBtnText,
-                  activeTab === "SHIFTS" && styles.switchTabBtnTextActive,
-                ]}
-              >
-                ⏱️ Ca trực
+              <Text style={[styles.tabButtonText, activeTab === "SHIFTS" && styles.tabButtonTextActive]}>
+                Ca trực ({dutyHistory.length})
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* ── Tab Content Area ───────────────────────────────────────────── */}
+          {/* ── Tab Content ─────────────────────────────────────────────────── */}
           {loading ? (
-            <View style={styles.tabLoadingBox}>
+            <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color="#2563EB" />
-              <Text style={styles.tabLoadingText}>Đang đồng bộ dữ liệu phòng...</Text>
+              <Text style={styles.loadingText}>Đang cập nhật nhật ký...</Text>
             </View>
-          ) : activeTab === "HISTORY" ? (
-            /* TAB 1: Check-in / Check-out History with RED Alerts */
+          ) : activeTab === "LOGS" ? (
+            /* TAB 1: Unified Activity & Duty Logs */
             <View style={styles.tabSection}>
-              <Text style={styles.tabSectionHeader}>LỊCH SỬ ĐIỂM DANH GẦN ĐÂY</Text>
-              {presenceHistory.length === 0 ? (
+              {localActivityLogs.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Text style={styles.emptyIcon}>📋</Text>
-                  <Text style={styles.emptyCardTitle}>Chưa có lượt quét nào</Text>
+                  <Text style={styles.emptyCardTitle}>Chưa có ghi nhận hoạt động</Text>
                   <Text style={styles.emptyCardText}>
-                    Các lượt quét barcode hoặc mã QR sẽ hiển thị tại đây theo thời gian thực.
+                    Khi ca trực bắt đầu hoặc sinh viên điểm danh, thông tin sẽ được cập nhật tại đây theo thời gian thực.
                   </Text>
                 </View>
               ) : (
-                presenceHistory.slice(0, 30).map((item) => {
-                  const isInvalid = !item.is_valid_member;
-                  return (
-                    <View
-                      key={item.id}
-                      style={[styles.historyItemCard, isInvalid && styles.historyItemInvalid]}
-                    >
-                      <View style={styles.historyTopRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.historyStudentName,
-                              isInvalid && styles.historyStudentNameInvalid,
-                            ]}
-                          >
-                            {item.student_name}
-                          </Text>
-                          <Text style={styles.historyStudentId}>MSSV: {item.student_id}</Text>
-                        </View>
-
-                        {isInvalid ? (
-                          <View style={styles.invalidBadgePill}>
-                            <Text style={styles.invalidBadgePillText}>🚨 KHÔNG THUỘC ORG</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.validBadgePill}>
-                            <Text style={styles.validBadgePillText}>✓ HỢP LỆ</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.historyMetaRow}>
-                        <Text style={styles.historyMetaText}>
-                          🕒 Vào:{" "}
-                          <Text style={styles.historyMetaBold}>
-                            {new Date(item.check_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </Text>
-                        </Text>
-                        {item.check_out_at && (
-                          <Text style={styles.historyMetaText}>
-                            🚪 Ra:{" "}
-                            <Text style={styles.historyMetaBold}>
-                              {new Date(item.check_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </Text>
-                          </Text>
-                        )}
-                        <Text style={styles.historyScannerText}>
-                          👤 Quét:{" "}
-                          <Text style={styles.historyScannerBold}>
-                            {item.scanner_name || "Trực phòng"}
-                          </Text>
-                        </Text>
+                localActivityLogs.slice(0, 40).map((log) => (
+                  <View key={log.id} style={styles.logItemCard}>
+                    <View style={styles.logItemLeft}>
+                      <View
+                        style={[
+                          styles.logDot,
+                          log.badgeStyle === "success" && styles.logDotSuccess,
+                          log.badgeStyle === "danger" && styles.logDotDanger,
+                          log.badgeStyle === "neutral" && styles.logDotNeutral,
+                        ]}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.logTitle}>{log.title}</Text>
+                        <Text style={styles.logSubtitle}>{log.subtitle}</Text>
                       </View>
                     </View>
-                  );
-                })
+
+                    <View style={styles.logItemRight}>
+                      <View
+                        style={[
+                          styles.logBadge,
+                          log.badgeStyle === "success" && styles.logBadgeSuccess,
+                          log.badgeStyle === "danger" && styles.logBadgeDanger,
+                          log.badgeStyle === "neutral" && styles.logBadgeNeutral,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.logBadgeText,
+                            log.badgeStyle === "success" && styles.logBadgeTextSuccess,
+                            log.badgeStyle === "danger" && styles.logBadgeTextDanger,
+                            log.badgeStyle === "neutral" && styles.logBadgeTextNeutral,
+                          ]}
+                        >
+                          {log.badge}
+                        </Text>
+                      </View>
+                      <Text style={styles.logTimestamp}>{log.timestamp}</Text>
+                    </View>
+                  </View>
+                ))
               )}
             </View>
           ) : activeTab === "OCCUPANTS" ? (
             /* TAB 2: Live Room Occupants */
             <View style={styles.tabSection}>
-              <Text style={styles.tabSectionHeader}>
-                SINH VIÊN ĐANG CÓ MẶT TRONG PHÒNG ({currentCount})
-              </Text>
               {occupants.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Text style={styles.emptyIcon}>👥</Text>
                   <Text style={styles.emptyCardTitle}>Phòng hiện đang trống</Text>
                   <Text style={styles.emptyCardText}>
-                    Khi sinh viên quét thẻ vào phòng, thông tin sẽ xuất hiện tại đây.
+                    Sinh viên điểm danh vào phòng sẽ xuất hiện tại danh sách này.
                   </Text>
                 </View>
               ) : (
                 occupants.map((occ) => (
-                  <View key={occ.student_id} style={styles.occupantItemCard}>
+                  <View key={occ.student_id} style={styles.occupantCard}>
                     <View style={{ flex: 1 }}>
-                      <View style={styles.occupantNameRow}>
+                      <View style={styles.occupantTitleRow}>
                         <Text style={styles.occupantName}>{occ.student_name}</Text>
                         {occ.is_on_duty && (
-                          <View style={styles.dutyMemberBadge}>
-                            <Text style={styles.dutyMemberBadgeText}>Trực phòng</Text>
+                          <View style={styles.dutyBadge}>
+                            <Text style={styles.dutyBadgeText}>Trực phòng</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={styles.occupantSubText}>
-                        ID: {occ.student_id} · Vào lúc:{" "}
-                        {new Date(occ.check_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <Text style={styles.occupantMeta}>
+                        MSSV: {occ.student_id} · Vào lúc: {new Date(occ.check_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
                     </View>
 
                     <TouchableOpacity
-                      style={styles.quickCheckoutBtn}
+                      style={styles.checkoutActionBtn}
                       onPress={() => handleQuickCheckOut(occ.student_id)}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.quickCheckoutBtnText}>Cho ra phòng</Text>
+                      <Text style={styles.checkoutActionText}>Rời phòng</Text>
                     </TouchableOpacity>
                   </View>
                 ))
               )}
             </View>
           ) : (
-            /* TAB 3: Duty Shift History */
+            /* TAB 3: Shift History */
             <View style={styles.tabSection}>
-              <Text style={styles.tabSectionHeader}>NHẬT KÝ CÁC PHIÊN TRỰC</Text>
               {dutyHistory.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Text style={styles.emptyIcon}>⏱️</Text>
-                  <Text style={styles.emptyCardTitle}>Chưa có ca trực nào</Text>
+                  <Text style={styles.emptyCardTitle}>Chưa có ca trực hoàn tất</Text>
                   <Text style={styles.emptyCardText}>
-                    Lịch sử các phiên trực của ban vận hành sẽ được lưu trữ tại đây.
+                    Nhật ký các phiên trực phòng sẽ hiển thị đầy đủ tại đây.
                   </Text>
                 </View>
               ) : (
-                dutyHistory.slice(0, 20).map((shift) => (
-                  <View key={shift.id} style={styles.shiftHistoryCard}>
-                    <View style={styles.shiftHistoryTop}>
-                      <Text style={styles.shiftStaffName}>{shift.duty_staff_name}</Text>
+                dutyHistory.slice(0, 25).map((shift) => (
+                  <View key={shift.id} style={styles.shiftCard}>
+                    <View style={styles.shiftCardTop}>
+                      <Text style={styles.shiftStaffName}>
+                        {resolveDisplayName(shift.duty_staff_name, shift.duty_staff_email)}
+                      </Text>
                       <View
                         style={
                           shift.status === "ACTIVE"
-                            ? styles.shiftActivePill
-                            : styles.shiftCompletedPill
+                            ? styles.shiftStatusPillActive
+                            : styles.shiftStatusPillDone
                         }
                       >
                         <Text
                           style={
                             shift.status === "ACTIVE"
-                              ? styles.shiftActivePillText
-                              : styles.shiftCompletedPillText
+                              ? styles.shiftStatusPillTextActive
+                              : styles.shiftStatusPillTextDone
                           }
                         >
-                          {shift.status === "ACTIVE" ? "ĐANG TRỰC" : "HOÀN TẤT"}
+                          {shift.status === "ACTIVE" ? "Đang trực" : "Hoàn thành"}
                         </Text>
                       </View>
                     </View>
-
-                    <Text style={styles.shiftMetaText}>
-                      Bắt đầu: {new Date(shift.start_time).toLocaleString()}
+                    <Text style={styles.shiftMeta}>
+                      Bắt đầu: {new Date(shift.start_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                     </Text>
-                    <Text style={styles.shiftMetaText}>
-                      Kết thúc:{" "}
-                      {shift.end_time
-                        ? new Date(shift.end_time).toLocaleString()
-                        : "Đang diễn ra"}
-                    </Text>
-                    <Text style={styles.shiftDurationText}>
-                      Thời lượng: {Math.round((shift.duration_seconds || 0) / 60)} phút
+                    {shift.end_time && (
+                      <Text style={styles.shiftMeta}>
+                        Kết thúc: {new Date(shift.end_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                      </Text>
+                    )}
+                    <Text style={styles.shiftDuration}>
+                      Thời gian trực: {Math.round((shift.duration_seconds || 0) / 60)} phút
                     </Text>
                   </View>
                 ))
@@ -691,28 +734,28 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(226, 232, 240, 0.8)",
+    borderBottomColor: "#E2E8F0",
   },
   backButton: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   backArrow: {
-    fontSize: 26,
-    color: "#334155",
+    fontSize: 24,
+    color: "#0F172A",
     fontWeight: "300",
-    marginTop: -4,
+    marginTop: -2,
   },
   topBarCenter: {
     flex: 1,
@@ -725,19 +768,9 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 2,
   },
-  miniLogo: {
-    width: 22,
-    height: 22,
-  },
-  roomTagRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
   buildingTagBadge: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#2563EB",
     backgroundColor: "#EFF6FF",
     paddingHorizontal: 6,
@@ -746,7 +779,7 @@ const styles = StyleSheet.create({
   },
   orgSlugBadge: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#64748B",
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 6,
@@ -761,38 +794,32 @@ const styles = StyleSheet.create({
   topBarRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
-  superAdminBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  adminBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: "#FEF3C7",
     borderWidth: 1,
     borderColor: "#FDE68A",
-    justifyContent: "center",
-    alignItems: "center",
   },
-  superAdminBtnText: {
-    fontSize: 15,
+  adminBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B45309",
   },
   personalQRBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#BFDBFE",
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  personalQRIcon: {
-    fontSize: 13,
   },
   personalQRText: {
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#2563EB",
   },
   userAvatarBtn: {
@@ -802,20 +829,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#1E293B",
+    backgroundColor: "#0F172A",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   userAvatarText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   userActiveDot: {
@@ -833,49 +853,38 @@ const styles = StyleSheet.create({
   // ── Scroll Content ───────────────────────────────────────────────────────
   scrollContent: {
     padding: 16,
-    gap: 16,
+    gap: 14,
     paddingBottom: 40,
   },
 
-  // ── Shift HUD Card ───────────────────────────────────────────────────────
+  // ── Executive Shift HUD Card ─────────────────────────────────────────────
   hudCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.9)",
-    shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-    position: "relative",
-    overflow: "hidden",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
   hudCardActive: {
     borderColor: "#A7F3D0",
-    backgroundColor: "#FFFFFF",
   },
   hudCardIdle: {
     borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-  },
-  hudAccentStrip: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 4,
   },
   hudHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  shiftStatusRow: {
+  shiftStatusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   statusDotActive: {
     width: 8,
@@ -887,551 +896,490 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#94A3B8",
   },
   statusTextActive: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "800",
     color: "#059669",
     letterSpacing: 0.5,
   },
   statusTextIdle: {
     fontSize: 11,
-    fontWeight: "900",
-    color: "#D97706",
+    fontWeight: "700",
+    color: "#64748B",
     letterSpacing: 0.5,
   },
   timerBadge: {
     backgroundColor: "#EFF6FF",
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#DBEAFE",
   },
   timerText: {
     fontSize: 12,
-    fontWeight: "800",
-    color: "#2563EB",
+    fontWeight: "700",
+    color: "#1D4ED8",
+    fontVariant: ["tabular-nums"],
   },
-  hudDetailsRow: {
-    marginTop: 10,
+  hudInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginTop: 12,
     marginBottom: 14,
   },
-  hudStaffLabel: {
-    fontSize: 13,
-    color: "#64748B",
+  hudInfoCol: {
+    flex: 1,
   },
-  hudStaffValue: {
-    color: "#0F172A",
+  hudInfoColRight: {
+    alignItems: "flex-end",
+  },
+  hudLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+    marginBottom: 2,
+  },
+  hudValue: {
+    fontSize: 14,
     fontWeight: "700",
-  },
-  hudTimeLabel: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  hudSubHint: {
-    fontSize: 11,
-    color: "#94A3B8",
-    marginTop: 2,
+    color: "#0F172A",
   },
   startShiftBtn: {
-    backgroundColor: "#10B981",
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: "#2563EB",
+    borderRadius: 10,
+    paddingVertical: 11,
     alignItems: "center",
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
   },
   startShiftBtnText: {
     color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 0.5,
+    fontWeight: "700",
   },
   endShiftBtn: {
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
-    borderColor: "#EF4444",
-    borderRadius: 12,
-    paddingVertical: 11,
+    borderColor: "#FECACA",
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: "center",
   },
   endShiftBtnText: {
     color: "#DC2626",
     fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontWeight: "700",
   },
 
-  // ── Hero Scan Station ("Bấm vô là quét") ──────────────────────────────────
-  heroScanCard: {
+  // ── Executive Scan Trigger Card ──────────────────────────────────────────
+  scanCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: "rgba(37, 99, 235, 0.2)",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  heroHeaderRow: {
+  scanCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 12,
   },
-  heroTitleCol: {
-    flex: 1,
-  },
-  heroTagBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  heroTagBadgeText: {
+  scanCardTag: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#2563EB",
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
   },
-  heroStationTitle: {
-    fontSize: 18,
-    fontWeight: "900",
+  scanCardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
     color: "#0F172A",
+    marginTop: 2,
   },
-  scannerTypePills: {
+  modeSegment: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 12,
-    padding: 3,
-    gap: 3,
+    borderRadius: 8,
+    padding: 2,
   },
-  typePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 9,
+  segmentBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  typePillActive: {
-    backgroundColor: "#2563EB",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+  segmentBtnActive: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  typePillText: {
+  segmentText: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#64748B",
   },
-  typePillTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "900",
+  segmentTextActive: {
+    color: "#0F172A",
+    fontWeight: "700",
   },
-  bigScanTrigger: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: "#93C5FD",
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+  scanActionBtn: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
     gap: 12,
   },
-  radarRingOuter: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+  scanIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: "#EFF6FF",
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: "#BFDBFE",
     justifyContent: "center",
     alignItems: "center",
   },
-  radarRingInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#2563EB",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 3,
+  scanCrosshair: {
+    width: 14,
+    height: 14,
+    borderWidth: 2,
+    borderColor: "#2563EB",
+    borderRadius: 3,
   },
-  scannerBigIcon: {
-    fontSize: 22,
+  scanActionTextCol: {
+    flex: 1,
   },
-  scanPromptTextContainer: {
-    alignItems: "center",
+  scanActionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
   },
-  scanPromptTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#2563EB",
-    letterSpacing: 0.5,
-  },
-  scanPromptDesc: {
+  scanActionSubtitle: {
     fontSize: 11,
     color: "#64748B",
-    marginTop: 4,
-    textAlign: "center",
-    lineHeight: 16,
+    marginTop: 1,
+  },
+  scanChevron: {
+    fontSize: 18,
+    color: "#94A3B8",
+    fontWeight: "300",
   },
 
   // ── Metrics Row ──────────────────────────────────────────────────────────
   metricsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   metricCard: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.9)",
-    shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: "#E2E8F0",
   },
   metricLabel: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#64748B",
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
   metricValueRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    marginTop: 6,
+    marginTop: 4,
   },
-  metricValueLarge: {
-    fontSize: 24,
-    fontWeight: "900",
+  metricValueBold: {
+    fontSize: 20,
+    fontWeight: "800",
     color: "#0F172A",
   },
   metricValueSub: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "600",
     color: "#94A3B8",
-    marginLeft: 4,
+    marginLeft: 3,
   },
-  metricBarTrack: {
-    height: 5,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 3,
-    marginTop: 10,
+  metricProgressTrack: {
+    height: 4,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 2,
+    marginTop: 8,
     overflow: "hidden",
   },
-  metricBarFill: {
+  metricProgressFill: {
     height: "100%",
-    borderRadius: 3,
+    borderRadius: 2,
   },
-  metricFootnote: {
+  metricStatusText: {
     fontSize: 10,
     color: "#059669",
-    fontWeight: "700",
+    fontWeight: "600",
     marginTop: 6,
   },
-  metricFootnoteWarn: {
+  metricStatusTextWarn: {
     color: "#DC2626",
   },
 
-  // ── Switch Tabs (Segmented Control) ──────────────────────────────────────
-  switchTabsContainer: {
+  // ── Segmented Control Tabs ───────────────────────────────────────────────
+  tabsContainer: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-  },
-  switchTabBtn: {
-    flex: 1,
-    paddingVertical: 10,
     borderRadius: 10,
+    padding: 3,
+    gap: 3,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
     alignItems: "center",
   },
-  switchTabBtnActive: {
+  tabButtonActive: {
     backgroundColor: "#FFFFFF",
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  switchTabBtnText: {
+  tabButtonText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#64748B",
   },
-  switchTabBtnTextActive: {
-    color: "#2563EB",
-    fontWeight: "900",
+  tabButtonTextActive: {
+    color: "#0F172A",
+    fontWeight: "700",
   },
 
-  // ── Tab Section Content ──────────────────────────────────────────────────
+  // ── Tab Content ──────────────────────────────────────────────────────────
   tabSection: {
-    gap: 12,
+    gap: 8,
   },
-  tabSectionHeader: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#64748B",
-    letterSpacing: 1,
-    marginLeft: 4,
-  },
-  tabLoadingBox: {
-    padding: 30,
+  loadingBox: {
+    padding: 24,
     alignItems: "center",
     gap: 8,
   },
-  tabLoadingText: {
+  loadingText: {
     color: "#64748B",
     fontSize: 12,
   },
   emptyCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    gap: 4,
-  },
-  emptyIcon: {
-    fontSize: 32,
-    marginBottom: 4,
   },
   emptyCardTitle: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#0F172A",
+    marginBottom: 4,
   },
   emptyCardText: {
     color: "#64748B",
-    fontSize: 12,
+    fontSize: 11,
     textAlign: "center",
-    maxWidth: 280,
+    lineHeight: 16,
+    maxWidth: 260,
   },
 
-  // History Item (Clean vs RED alert highlight)
-  historyItemCard: {
+  // Activity Log Item
+  logItemCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  historyItemInvalid: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#EF4444",
-    borderWidth: 1.5,
-  },
-  historyTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  historyStudentName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  historyStudentNameInvalid: {
-    color: "#991B1B",
-  },
-  historyStudentId: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  validBadgePill: {
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-  },
-  validBadgePillText: {
-    color: "#059669",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  invalidBadgePill: {
-    backgroundColor: "#DC2626",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  invalidBadgePillText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  historyMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(226, 232, 240, 0.8)",
-  },
-  historyMetaText: {
-    fontSize: 11,
-    color: "#64748B",
-  },
-  historyMetaBold: {
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  historyScannerText: {
-    fontSize: 11,
-    color: "#2563EB",
-  },
-  historyScannerBold: {
-    fontWeight: "700",
-  },
-
-  // Occupants
-  occupantItemCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
-  occupantNameRow: {
+  logItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  logDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  logDotSuccess: {
+    backgroundColor: "#10B981",
+  },
+  logDotDanger: {
+    backgroundColor: "#EF4444",
+  },
+  logDotNeutral: {
+    backgroundColor: "#94A3B8",
+  },
+  logTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  logSubtitle: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  logItemRight: {
+    alignItems: "flex-end",
+    gap: 3,
+  },
+  logBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  logBadgeSuccess: {
+    backgroundColor: "#ECFDF5",
+  },
+  logBadgeDanger: {
+    backgroundColor: "#FEF2F2",
+  },
+  logBadgeNeutral: {
+    backgroundColor: "#F1F5F9",
+  },
+  logBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  logBadgeTextSuccess: {
+    color: "#059669",
+  },
+  logBadgeTextDanger: {
+    color: "#DC2626",
+  },
+  logBadgeTextNeutral: {
+    color: "#64748B",
+  },
+  logTimestamp: {
+    fontSize: 10,
+    color: "#94A3B8",
+    fontVariant: ["tabular-nums"],
+  },
+
+  // Occupant Card
+  occupantCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  occupantTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
   occupantName: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#0F172A",
   },
-  dutyMemberBadge: {
+  dutyBadge: {
     backgroundColor: "#FEF3C7",
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#FDE68A",
   },
-  dutyMemberBadgeText: {
-    fontSize: 10,
+  dutyBadgeText: {
+    fontSize: 9,
     fontWeight: "700",
-    color: "#D97706",
+    color: "#B45309",
   },
-  occupantSubText: {
+  occupantMeta: {
     fontSize: 11,
     color: "#64748B",
-    marginTop: 3,
+    marginTop: 2,
   },
-  quickCheckoutBtn: {
+  checkoutActionBtn: {
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  quickCheckoutBtnText: {
-    color: "#DC2626",
+  checkoutActionText: {
     fontSize: 11,
     fontWeight: "700",
+    color: "#DC2626",
   },
 
-  // Shifts
-  shiftHistoryCard: {
+  // Shift Card
+  shiftCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    gap: 4,
-    shadowColor: "#0F2B5C",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    gap: 3,
   },
-  shiftHistoryTop: {
+  shiftCardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
   },
   shiftStaffName: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#0F172A",
   },
-  shiftActivePill: {
+  shiftStatusPillActive: {
     backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  shiftActivePillText: {
-    color: "#059669",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  shiftCompletedPill: {
+  shiftStatusPillDone: {
     backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  shiftCompletedPillText: {
-    color: "#64748B",
+  shiftStatusPillTextActive: {
     fontSize: 10,
     fontWeight: "700",
+    color: "#059669",
   },
-  shiftMetaText: {
+  shiftStatusPillTextDone: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  shiftMeta: {
     fontSize: 11,
     color: "#64748B",
   },
-  shiftDurationText: {
+  shiftDuration: {
     fontSize: 11,
     fontWeight: "700",
     color: "#2563EB",
-    marginTop: 2,
+    marginTop: 1,
   },
 });

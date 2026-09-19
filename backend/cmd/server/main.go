@@ -82,6 +82,8 @@ func main() {
 		api.POST("/rooms/:room_id/shift/start", handler.HandleStartShift(db))
 		api.POST("/rooms/:room_id/shift/end", handler.HandleEndShift(db))
 		api.GET("/rooms/:room_id/shift/current", handler.HandleGetCurrentShift(db))
+		api.GET("/rooms/:room_id/presence-history", handler.HandleAdminRoomPresenceHistory(db))
+		api.GET("/rooms/:room_id/duty-history", handler.HandleAdminRoomDutyHistory(db))
 
 		// ── QR flow ───────────────────────────────────────────────────────────
 		// Generate a 10-second rotating QR token (called by student device)
