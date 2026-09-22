@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/model"
 )
 
 type AuthOrgResponse struct {
@@ -135,85 +137,283 @@ func (s *OrgSyncService) SyncMembers(ctx context.Context, orgID int64) error {
 	return nil
 }
 
-// VerifyMembership checks whether an individual belongs to the specified organization.
-// It checks against the replicated organization_members table by student_code, user_id, or email.
-func (s *OrgSyncService) VerifyMembership(ctx context.Context, orgID int64, identifier string) (bool, string, string, error) {
-	if s.db == nil {
-		return true, "", "", nil
+// UserVerificationResult holds whether an individual exists on the system and if they belong to the room's org.
+type UserVerificationResult struct {
+	IsMember     bool   `json:"is_member"`
+	IsSystemUser bool   `json:"is_system_user"`
+	FullName     string `json:"full_name"`
+	Email        string `json:"email"`
+	UserID       int64  `json:"user_id,omitempty"`
+	OrgRole      string `json:"org_role,omitempty"`
+	OrgName      string `json:"org_name,omitempty"`
+}
+
+type AuthUserLookupItem struct {
+	ID             int64    `json:"id"`
+	Name           string   `json:"name"`
+	Email          string   `json:"email"`
+	Role           string   `json:"role"`
+	Roles          []string `json:"roles"`
+	Team           string   `json:"team"`
+	Type           string   `json:"type"`
+	Code           string   `json:"code"`
+	TotalScore     int      `json:"totalScore"`
+	Active         bool     `json:"active"`
+	ProfilePicture string   `json:"profilePicture"`
+	Organization   string   `json:"organization"`
+	Organizations  []string `json:"organizations"`
+	CreatedAt      string   `json:"createdAt"`
+}
+
+type AuthUserLookupPage struct {
+	Items []AuthUserLookupItem `json:"items"`
+}
+
+// VerifyUser checks whether an individual exists on the system, and whether they belong to the specified organization.
+// Strict verification with zero hardcoding: checks local replicated org tables, all system org tables, and Auth Service.
+func (s *OrgSyncService) VerifyUser(ctx context.Context, orgID int64, identifier string) (UserVerificationResult, error) {
+	cleanID := strings.TrimSpace(identifier)
+	if cleanID == "" {
+		return UserVerificationResult{}, nil
 	}
 
-	cleanID := strings.TrimSpace(identifier)
-	var fullName, email string
+	if s.db == nil {
+		return UserVerificationResult{IsMember: true, IsSystemUser: true}, nil
+	}
 
-	// 1. Check local replicated organization_members table (case-insensitive & trimmed)
+	// 1. Check local replicated organization_members table for the specific organization
+	var res UserVerificationResult
 	err := s.db.QueryRowContext(ctx, `
-		SELECT full_name, email
-		FROM organization_members
-		WHERE organization_id = $1
-		  AND (LOWER(TRIM(student_code)) = LOWER($2) OR user_id::text = $2 OR LOWER(TRIM(email)) = LOWER($2))
+		SELECT m.user_id, m.full_name, m.email, m.org_role, o.name
+		FROM organization_members m
+		JOIN organizations o ON m.organization_id = o.id
+		WHERE m.organization_id = $1
+		  AND (LOWER(TRIM(m.student_code)) = LOWER($2) OR m.user_id::text = $2 OR LOWER(TRIM(m.email)) = LOWER($2))
 		LIMIT 1
-	`, orgID, cleanID).Scan(&fullName, &email)
+	`, orgID, cleanID).Scan(&res.UserID, &res.FullName, &res.Email, &res.OrgRole, &res.OrgName)
 
 	if err == nil {
-		return true, fullName, email, nil
+		res.IsMember = true
+		res.IsSystemUser = true
+		return res, nil
 	}
 
-	// 2. Guaranteed recognition for verified student codes (e.g. MSSV 2312438 - Nguyễn Phúc Nhân)
-	if cleanID == "2312438" || strings.Contains(strings.ToLower(cleanID), "nhan.nguyen") {
-		fullName = "Nguyễn Phúc Nhân"
-		email = "nhan.nguyen2005phuyen@gmail.com"
-		_, _ = s.db.ExecContext(ctx, `
-			INSERT INTO organization_members (organization_id, user_id, student_code, email, full_name, org_role, updated_at)
-			VALUES ($1, 2312438, '2312438', $2, $3, 'MEMBER', NOW())
-			ON CONFLICT (organization_id, user_id) DO UPDATE
-			SET student_code = '2312438', full_name = EXCLUDED.full_name, email = EXCLUDED.email;
-		`, orgID, email, fullName)
-		return true, fullName, email, nil
+	// 2. Check if the user exists in ANY other organization on the system (Registered user, but not in this org)
+	var anyOrgRes UserVerificationResult
+	err = s.db.QueryRowContext(ctx, `
+		SELECT m.user_id, m.full_name, m.email, m.org_role, o.name
+		FROM organization_members m
+		JOIN organizations o ON m.organization_id = o.id
+		WHERE LOWER(TRIM(m.student_code)) = LOWER($1) OR m.user_id::text = $1 OR LOWER(TRIM(m.email)) = LOWER($1)
+		LIMIT 1
+	`, cleanID).Scan(&anyOrgRes.UserID, &anyOrgRes.FullName, &anyOrgRes.Email, &anyOrgRes.OrgRole, &anyOrgRes.OrgName)
+
+	if err == nil {
+		anyOrgRes.IsMember = false
+		anyOrgRes.IsSystemUser = true
+		return anyOrgRes, nil
 	}
 
-	// 3. On cache miss, attempt on-demand synchronous sync with Auth Service
+	// 3. On local cache miss, query Auth Service dynamically
 	syncCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
+
+	// Sync current org members in case newly added
 	if syncErr := s.SyncMembers(syncCtx, orgID); syncErr == nil {
 		err = s.db.QueryRowContext(ctx, `
-			SELECT full_name, email
-			FROM organization_members
-			WHERE organization_id = $1
-			  AND (LOWER(TRIM(student_code)) = LOWER($2) OR user_id::text = $2 OR LOWER(TRIM(email)) = LOWER($2))
+			SELECT m.user_id, m.full_name, m.email, m.org_role, o.name
+			FROM organization_members m
+			JOIN organizations o ON m.organization_id = o.id
+			WHERE m.organization_id = $1
+			  AND (LOWER(TRIM(m.student_code)) = LOWER($2) OR m.user_id::text = $2 OR LOWER(TRIM(m.email)) = LOWER($2))
 			LIMIT 1
-		`, orgID, cleanID).Scan(&fullName, &email)
+		`, orgID, cleanID).Scan(&res.UserID, &res.FullName, &res.Email, &res.OrgRole, &res.OrgName)
 		if err == nil {
-			return true, fullName, email, nil
+			res.IsMember = true
+			res.IsSystemUser = true
+			return res, nil
 		}
 	}
 
-	// 4. Try localhost:8080 if s.authBaseURL differed
+	// 4. Query Auth Service /api/users?query=cleanID to check system existence
+	authURLs := []string{s.authBaseURL}
 	if !strings.Contains(s.authBaseURL, "localhost") {
-		localReqURL := fmt.Sprintf("http://localhost:8080/api/organizations/%d/members", orgID)
-		if req, err := http.NewRequestWithContext(syncCtx, http.MethodGet, localReqURL, nil); err == nil {
-			if resp, err := s.httpClient.Do(req); err == nil && resp.StatusCode == http.StatusOK {
-				var members []AuthMemberResponse
-				if json.NewDecoder(resp.Body).Decode(&members) == nil {
-					for _, m := range members {
-						_, _ = s.db.ExecContext(ctx, `
-							INSERT INTO organization_members (organization_id, user_id, student_code, email, full_name, org_role, updated_at)
-							VALUES ($1, $2, $3, $4, $5, $6, NOW())
-							ON CONFLICT (organization_id, user_id) DO NOTHING;
-						`, orgID, m.UserID, m.StudentCode, m.Email, m.FullName, m.OrgRole)
-						if strings.EqualFold(strings.TrimSpace(m.StudentCode), cleanID) ||
-							strings.EqualFold(strings.TrimSpace(m.Email), cleanID) ||
-							fmt.Sprintf("%d", m.UserID) == cleanID {
-							resp.Body.Close()
-							return true, m.FullName, m.Email, nil
-						}
+		authURLs = append(authURLs, "http://localhost:8080")
+	}
+
+	var orgName, orgSlug string
+	_ = s.db.QueryRowContext(ctx, `SELECT name, slug FROM organizations WHERE id = $1`, orgID).Scan(&orgName, &orgSlug)
+
+	for _, baseURL := range authURLs {
+		reqURL := fmt.Sprintf("%s/api/users?query=%s", baseURL, cleanID)
+		req, rErr := http.NewRequestWithContext(syncCtx, http.MethodGet, reqURL, nil)
+		if rErr != nil {
+			continue
+		}
+		resp, dErr := s.httpClient.Do(req)
+		if dErr != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
+
+		var page AuthUserLookupPage
+		decErr := json.NewDecoder(resp.Body).Decode(&page)
+		resp.Body.Close()
+		if decErr != nil {
+			continue
+		}
+
+		for _, item := range page.Items {
+			if strings.EqualFold(strings.TrimSpace(item.Code), cleanID) ||
+				strings.EqualFold(strings.TrimSpace(item.Email), cleanID) ||
+				fmt.Sprintf("%d", item.ID) == cleanID {
+				isMember := false
+				for _, o := range item.Organizations {
+					if (orgName != "" && strings.EqualFold(o, orgName)) ||
+						(orgSlug != "" && strings.EqualFold(o, orgSlug)) {
+						isMember = true
+						break
 					}
 				}
-				resp.Body.Close()
+				if isMember {
+					_, _ = s.db.ExecContext(ctx, `
+						INSERT INTO organization_members (organization_id, user_id, student_code, email, full_name, org_role, updated_at)
+						VALUES ($1, $2, $3, $4, $5, $6, NOW())
+						ON CONFLICT (organization_id, user_id) DO UPDATE
+						SET student_code = EXCLUDED.student_code, full_name = EXCLUDED.full_name, email = EXCLUDED.email;
+					`, orgID, item.ID, item.Code, item.Email, item.Name, item.Role)
+				}
+				return UserVerificationResult{
+					IsMember:     isMember,
+					IsSystemUser: true,
+					FullName:     item.Name,
+					Email:        item.Email,
+					UserID:       item.ID,
+					OrgRole:      item.Role,
+					OrgName:      orgName,
+				}, nil
 			}
 		}
 	}
 
-	return false, "", "", nil
+	// 5. Not found on system or organization
+	return UserVerificationResult{
+		IsMember:     false,
+		IsSystemUser: false,
+		FullName:     "",
+		Email:        "",
+	}, nil
+}
+
+// VerifyMembership checks whether an individual belongs to the specified organization.
+// Retained for backward-compatibility; delegates to VerifyUser.
+func (s *OrgSyncService) VerifyMembership(ctx context.Context, orgID int64, identifier string) (bool, string, string, error) {
+	result, err := s.VerifyUser(ctx, orgID, identifier)
+	return result.IsMember, result.FullName, result.Email, err
+}
+
+// GetStudentProfile looks up the student's full profile across local member cache and central Auth Service.
+func (s *OrgSyncService) GetStudentProfile(ctx context.Context, identifier string) (*model.StudentProfile, error) {
+	cleanID := strings.TrimSpace(identifier)
+	if cleanID == "" {
+		return nil, nil
+	}
+
+	// 1. Try querying Auth Service for complete profile
+	authURLs := []string{s.authBaseURL}
+	if !strings.Contains(s.authBaseURL, "localhost") {
+		authURLs = append(authURLs, "http://localhost:8080")
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	for _, baseURL := range authURLs {
+		reqURL := fmt.Sprintf("%s/api/users?query=%s", baseURL, cleanID)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := s.httpClient.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
+
+		var page AuthUserLookupPage
+		decErr := json.NewDecoder(resp.Body).Decode(&page)
+		resp.Body.Close()
+		if decErr != nil {
+			continue
+		}
+
+		for _, item := range page.Items {
+			if strings.EqualFold(strings.TrimSpace(item.Code), cleanID) ||
+				strings.EqualFold(strings.TrimSpace(item.Email), cleanID) ||
+				fmt.Sprintf("%d", item.ID) == cleanID {
+
+				orgStr := item.Organization
+				if orgStr == "" && len(item.Organizations) > 0 {
+					orgStr = strings.Join(item.Organizations, ", ")
+				}
+
+				return &model.StudentProfile{
+					ID:             fmt.Sprintf("%d", item.ID),
+					Name:           item.Name,
+					Email:          item.Email,
+					Code:           item.Code,
+					Role:           item.Role,
+					Roles:          item.Roles,
+					Team:           item.Team,
+					Type:           item.Type,
+					Score:          item.TotalScore,
+					DateAdded:      item.CreatedAt,
+					Status:         item.Active,
+					ProfilePicture: item.ProfilePicture,
+					Organization:   orgStr,
+					Organizations:  item.Organizations,
+				}, nil
+			}
+		}
+	}
+
+	// 2. Fallback to local organization_members table
+	if s.db != nil {
+		var userID int64
+		var fullName, email, studentCode, orgRole, orgName string
+		var createdAt time.Time
+		err := s.db.QueryRowContext(ctx, `
+			SELECT m.user_id, m.full_name, m.email, COALESCE(m.student_code, ''), m.org_role, o.name, m.created_at
+			FROM organization_members m
+			JOIN organizations o ON m.organization_id = o.id
+			WHERE LOWER(TRIM(m.student_code)) = LOWER($1) OR m.user_id::text = $1 OR LOWER(TRIM(m.email)) = LOWER($1)
+			LIMIT 1
+		`, cleanID).Scan(&userID, &fullName, &email, &studentCode, &orgRole, &orgName, &createdAt)
+
+		if err == nil {
+			return &model.StudentProfile{
+				ID:            fmt.Sprintf("%d", userID),
+				Name:          fullName,
+				Email:         email,
+				Code:          studentCode,
+				Role:          orgRole,
+				Roles:         []string{orgRole},
+				Team:          "Research",
+				Type:          "CLC",
+				Score:         0,
+				DateAdded:     createdAt.Format(time.RFC3339),
+				Status:        true,
+				Organization:  orgName,
+				Organizations: []string{orgName},
+			}, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // persistOrganizations writes the synced organizations into the database using an upsert transaction

@@ -9,6 +9,7 @@ import {
   DutyShiftRecord,
   PresenceHistoryItem,
   InspectionOrgNode,
+  UserProfileDetail,
 } from "../types";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8086/api/v1";
@@ -22,15 +23,6 @@ const SECURE_USER_META_KEY = "bdchub_dutylog_user_meta";
 export function resolveDisplayName(rawName?: string, email?: string): string {
   const cleanEmail = (email || "").toLowerCase().trim();
   const cleanName = (rawName || "").trim();
-
-  // If email or name relates to the authenticated student account
-  if (
-    cleanEmail.includes("nhan.nguyen") ||
-    cleanName.toLowerCase().includes("nhan.nguyen") ||
-    cleanName.toUpperCase().includes("NHAN.NGUYEN2005PHUYEN")
-  ) {
-    return "Nguyễn Phúc Nhân";
-  }
 
   // If already a valid human name (not an email or username string with dots/numbers)
   if (
@@ -553,11 +545,6 @@ export async function performCheckIn(
   const scanner_id = currentUser ? String(currentUser.id) : "";
   const scanner_name = resolveDisplayName(currentUser?.name, currentUser?.email);
 
-  // Student 2312438 is officially registered as Nguyễn Phúc Nhân (BDC Member)
-  const isTargetNhan =
-    cleanId === "2312438" ||
-    cleanId.toLowerCase().includes("nhan.nguyen");
-
   let result: CheckInResult | null = null;
   try {
     const res = await authFetch(`${BASE_URL}/rooms/${roomId}/checkin`, {
@@ -565,7 +552,6 @@ export async function performCheckIn(
       headers: getAuthHeaders(),
       body: JSON.stringify({
         student_id: cleanId,
-        student_name: isTargetNhan ? "Nguyễn Phúc Nhân" : undefined,
         method: "BARCODE_SCAN",
         client_timestamp: new Date().toISOString(),
         scanner_id,
@@ -577,45 +563,72 @@ export async function performCheckIn(
       result = await res.json();
     }
   } catch (err) {
-    console.warn("Check-in network request failed, generating fallback response:", err);
+    console.warn("Check-in network request failed, checking offline fallback:", err);
   }
 
-  // Override / ensure 2312438 is always recognized as a valid member
-  if (isTargetNhan) {
-    result = {
-      success: true,
-      presence_id: result?.presence_id || Date.now(),
-      room_id: roomId,
-      student_id: "2312438",
-      student_name: "Nguyễn Phúc Nhân",
-      check_in_at: new Date().toISOString(),
-      is_on_duty: false,
-      current_room_occupancy: (result?.current_room_occupancy || 0) + 1,
-      is_valid_member: true,
-      alert_color: "GREEN",
-      alert_message: "Xác nhận hợp lệ: Nguyễn Phúc Nhân (2312438) thuộc tổ chức",
-      scanner_id,
-      scanner_name,
-    };
-  } else if (!result) {
+  // If backend was unreachable, attempt real fallback verification via Auth Service
+  if (!result) {
+    let isSysUser = false;
+    let isValidMember = false;
+    let resolvedName = `Sinh viên ${cleanId}`;
+
+    try {
+      const authRes = await authFetch(`${AUTH_URL}/api/users?query=${encodeURIComponent(cleanId)}`, {
+        headers: getAuthHeaders(),
+      });
+      if (authRes.ok) {
+        const data = await authRes.json();
+        const items: any[] = data.items || [];
+        const match = items.find(
+          (u) =>
+            (u.code && String(u.code).toLowerCase() === cleanId.toLowerCase()) ||
+            (u.email && u.email.toLowerCase() === cleanId.toLowerCase()) ||
+            String(u.id) === cleanId
+        );
+        if (match) {
+          isSysUser = true;
+          resolvedName = match.name || match.fullName || resolvedName;
+          const orgs = match.organizations || (match.organization ? [match.organization] : []);
+          isValidMember = orgs.some((o: string) => o.toLowerCase().includes("big data") || o.toLowerCase().includes("bdc"));
+        }
+      }
+    } catch {}
+
+    const alertColor = isValidMember ? "GREEN" : "RED";
+    const alertMsg = isValidMember
+      ? `Xác nhận hợp lệ: ${resolvedName} thuộc tổ chức`
+      : isSysUser
+      ? `Người dùng ${resolvedName} đã có tài khoản trên hệ thống nhưng KHÔNG thuộc tổ chức này`
+      : `Mã số ${cleanId} chưa có tài khoản trên hệ thống và ngoài tổ chức`;
+
     result = {
       success: true,
       presence_id: Date.now(),
       room_id: roomId,
       student_id: cleanId,
-      student_name: `Sinh viên ${cleanId}`,
+      student_name: resolvedName,
       check_in_at: new Date().toISOString(),
       is_on_duty: false,
       current_room_occupancy: 1,
-      is_valid_member: true,
-      alert_color: "GREEN",
-      alert_message: `Xác nhận hợp lệ: Sinh viên ${cleanId} thuộc tổ chức`,
+      is_valid_member: isValidMember,
+      is_system_user: isSysUser,
+      alert_color: alertColor,
+      alert_message: alertMsg,
       scanner_id,
       scanner_name,
     };
   }
 
-  // Record into local presence log
+  // Deduplication for local presence logs:
+  // If an active check-in exists for this student in this room within the last 30 seconds, update instead of duplicating
+  const nowMs = new Date(result.check_in_at).getTime();
+  const existingIndex = localPresenceLogs.findIndex(
+    (p) =>
+      p.room_id === roomId &&
+      p.student_id === result!.student_id &&
+      (!p.check_out_at || Math.abs(nowMs - new Date(p.check_in_at).getTime()) < 30000)
+  );
+
   const newLog: PresenceHistoryItem = {
     id: result.presence_id,
     organization_id: 1,
@@ -630,9 +643,15 @@ export async function performCheckIn(
     scanner_id,
     scanner_name,
     is_valid_member: result.is_valid_member,
+    is_system_user: result.is_system_user,
     created_at: result.check_in_at,
   };
-  localPresenceLogs = [newLog, ...localPresenceLogs.filter((p) => p.id !== newLog.id)];
+
+  if (existingIndex >= 0) {
+    localPresenceLogs[existingIndex] = newLog;
+  } else {
+    localPresenceLogs = [newLog, ...localPresenceLogs];
+  }
 
   return result;
 }
@@ -711,12 +730,11 @@ export async function generateQRToken(
   studentName: string
 ): Promise<{ payload: string; expires_at: string }> {
   const cleanId = studentId.trim();
-  const resolvedName = cleanId === "2312438" ? "Nguyễn Phúc Nhân" : studentName;
   try {
     const res = await authFetch(`${BASE_URL}/qr/generate`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ student_id: cleanId, student_name: resolvedName }),
+      body: JSON.stringify({ student_id: cleanId, student_name: studentName }),
     });
     if (res.ok) return res.json();
   } catch {}
@@ -736,8 +754,6 @@ export async function performQRCheckin(
   const scanner_id = currentUser ? String(currentUser.id) : "";
   const scanner_name = resolveDisplayName(currentUser?.name, currentUser?.email);
 
-  const isTargetNhan = payload.includes("2312438") || payload.toLowerCase().includes("nhan.nguyen");
-
   let result: CheckInResult | null = null;
   try {
     const res = await authFetch(`${BASE_URL}/rooms/${roomId}/checkin-qr`, {
@@ -755,25 +771,44 @@ export async function performQRCheckin(
     }
   } catch (e) {}
 
-  if (isTargetNhan || !result) {
+  if (!result) {
+    // Parse student ID/name from payload if present (format: base64url(student_id:student_name:ts).sig or bdc_qr_id_ts)
+    let parsedStudentId = "QR_USER";
+    let parsedStudentName = "Sinh viên";
+    try {
+      const rawPayload = payload.split(".")[0];
+      if (rawPayload.startsWith("bdc_qr_")) {
+        const parts = rawPayload.split("_");
+        if (parts.length >= 3) parsedStudentId = parts[2];
+      }
+    } catch {}
+
     result = {
       success: true,
-      presence_id: result?.presence_id || Date.now(),
+      presence_id: Date.now(),
       room_id: roomId,
-      student_id: isTargetNhan ? "2312438" : "2310001",
-      student_name: isTargetNhan ? "Nguyễn Phúc Nhân" : "Sinh viên BDC",
+      student_id: parsedStudentId,
+      student_name: parsedStudentName,
       check_in_at: new Date().toISOString(),
       is_on_duty: false,
       current_room_occupancy: 1,
-      is_valid_member: true,
-      alert_color: "GREEN",
-      alert_message: isTargetNhan
-        ? "Xác nhận hợp lệ: Nguyễn Phúc Nhân (2312438) thuộc tổ chức"
-        : "Xác nhận hợp lệ: Sinh viên thuộc tổ chức",
+      is_valid_member: false,
+      is_system_user: false,
+      alert_color: "RED",
+      alert_message: `Quét mã QR ${parsedStudentId} (Chế độ offline)`,
       scanner_id,
       scanner_name,
     };
   }
+
+  // Deduplication for local presence logs
+  const nowMs = new Date(result.check_in_at).getTime();
+  const existingIndex = localPresenceLogs.findIndex(
+    (p) =>
+      p.room_id === roomId &&
+      p.student_id === result!.student_id &&
+      (!p.check_out_at || Math.abs(nowMs - new Date(p.check_in_at).getTime()) < 30000)
+  );
 
   const newLog: PresenceHistoryItem = {
     id: result.presence_id,
@@ -789,9 +824,15 @@ export async function performQRCheckin(
     scanner_id,
     scanner_name,
     is_valid_member: result.is_valid_member,
+    is_system_user: result.is_system_user,
     created_at: result.check_in_at,
   };
-  localPresenceLogs = [newLog, ...localPresenceLogs.filter((p) => p.id !== newLog.id)];
+
+  if (existingIndex >= 0) {
+    localPresenceLogs[existingIndex] = newLog;
+  } else {
+    localPresenceLogs = [newLog, ...localPresenceLogs];
+  }
 
   return result;
 }
@@ -835,7 +876,21 @@ export async function fetchPresenceHistory(
         ...localPresenceLogs.filter((p) => !serverIds.has(p.id) && p.room_id === roomId),
         ...serverLogs,
       ];
-      return merged;
+
+      // Anti-duplicate synthesis: deduplicate consecutive identical student check-ins within 10s
+      const deduped: PresenceHistoryItem[] = [];
+      for (const item of merged) {
+        const itemTime = new Date(item.check_in_at).getTime();
+        const isDuplicate = deduped.some(
+          (prev) =>
+            prev.student_id === item.student_id &&
+            Math.abs(itemTime - new Date(prev.check_in_at).getTime()) < 10000
+        );
+        if (!isDuplicate) {
+          deduped.push(item);
+        }
+      }
+      return deduped;
     }
   } catch (e) {
     console.warn("Fetch presence history error, using local logs:", e);
@@ -878,3 +933,90 @@ export async function fetchDutyHistory(
   }
   return localShiftRecords.filter((s) => s.room_id === roomId);
 }
+
+export async function fetchStudentProfile(
+  studentId: string
+): Promise<UserProfileDetail | null> {
+  const cleanId = studentId.trim();
+  if (!cleanId) return null;
+
+  try {
+    const res = await authFetch(
+      `${BASE_URL}/students/${encodeURIComponent(cleanId)}/profile`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.exists_on_system && data.profile) {
+        const p = data.profile;
+        return {
+          id: p.id || cleanId,
+          name: p.name || `Student ${cleanId}`,
+          email: p.email || "",
+          code: p.code || cleanId,
+          role: p.role || "MEMBER",
+          roles: p.roles,
+          team: p.team || "None",
+          type: p.type || "CLC",
+          score: p.score ?? 0,
+          dateAdded: p.date_added || p.dateAdded || new Date().toISOString(),
+          status: p.status !== undefined ? p.status : true,
+          profilePicture: p.profile_picture || p.profilePicture,
+          organization: p.organization || "BDC",
+          organizations: p.organizations || [],
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("fetchStudentProfile from DutyLog backend failed, falling back to Auth:", err);
+  }
+
+  // Fallback to direct Auth Service lookup
+  try {
+    const authRes = await authFetch(
+      `${AUTH_URL}/api/users?query=${encodeURIComponent(cleanId)}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    if (authRes.ok) {
+      const authData = await authRes.json();
+      const users: any[] = authData.items || authData.users || [];
+      const matched = users.find(
+        (u) =>
+          (u.code && u.code.toLowerCase() === cleanId.toLowerCase()) ||
+          (u.email && u.email.toLowerCase() === cleanId.toLowerCase()) ||
+          String(u.id) === cleanId
+      );
+      if (matched) {
+        return {
+          id: matched.id,
+          name: matched.name || matched.fullName || cleanId,
+          email: matched.email || "",
+          code: matched.code || cleanId,
+          role: matched.role || (matched.roles && matched.roles[0]) || "MEMBER",
+          roles: matched.roles,
+          team: matched.team || "None",
+          type: matched.type || "CLC",
+          score: matched.totalScore ?? matched.score ?? 0,
+          dateAdded: matched.createdAt || new Date().toISOString(),
+          status: matched.active !== undefined ? matched.active : true,
+          profilePicture: matched.profilePicture,
+          organization:
+            matched.organization ||
+            (matched.organizations && matched.organizations[0]) ||
+            "BDC",
+          organizations: matched.organizations || [],
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("fetchStudentProfile from Auth service failed:", err);
+  }
+
+  return null;
+}
+

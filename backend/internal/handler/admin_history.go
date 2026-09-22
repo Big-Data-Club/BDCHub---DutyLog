@@ -95,7 +95,7 @@ func HandleAdminRoomPresenceHistory(db *sql.DB) gin.HandlerFunc {
 		rows, err := db.QueryContext(ctx, `
 			SELECT id, organization_id, room_id, student_id, student_name, check_in_at, check_out_at,
 			       duration_seconds, scan_method, is_on_duty, COALESCE(scanner_id, ''), COALESCE(scanner_name, ''),
-			       is_valid_member, created_at
+			       is_valid_member, created_at, COALESCE(is_system_user, is_valid_member)
 			FROM duty_presence_logs
 			WHERE room_id = $1
 			ORDER BY check_in_at DESC
@@ -118,6 +118,7 @@ func HandleAdminRoomPresenceHistory(db *sql.DB) gin.HandlerFunc {
 				&item.StudentID, &item.StudentName, &item.CheckInAt, &checkOutAt,
 				&durationSec, &item.ScanMethod, &item.IsOnDuty,
 				&item.ScannerID, &item.ScannerName, &item.IsValidMember, &item.CreatedAt,
+				&item.IsSystemUser,
 			); err != nil {
 				continue
 			}

@@ -42,6 +42,7 @@ export interface Occupant {
   check_in_at: string;
   is_on_duty: boolean;
   is_valid_member?: boolean;
+  is_system_user?: boolean;
 }
 
 export interface CheckInResult {
@@ -54,7 +55,8 @@ export interface CheckInResult {
   is_on_duty: boolean;
   current_room_occupancy: number;
   is_valid_member: boolean;
-  alert_color: "GREEN" | "RED";
+  is_system_user?: boolean;
+  alert_color: "GREEN" | "RED" | "AMBER";
   alert_message: string;
   scanner_id?: string;
   scanner_name?: string;
@@ -102,7 +104,25 @@ export interface PresenceHistoryItem {
   scanner_id: string;
   scanner_name: string;
   is_valid_member: boolean;
+  is_system_user?: boolean;
   created_at: string;
+}
+
+export interface UserProfileDetail {
+  id: string | number;
+  name: string;
+  email: string;
+  code: string;
+  role: string;
+  roles?: string[];
+  team?: string;
+  type?: string;
+  score?: number;
+  dateAdded?: string;
+  status?: boolean;
+  profilePicture?: string;
+  organization?: string;
+  organizations?: string[];
 }
 
 export interface InspectionOrgNode {

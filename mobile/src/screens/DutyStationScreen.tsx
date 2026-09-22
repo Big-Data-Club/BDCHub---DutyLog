@@ -18,6 +18,7 @@ import {
   Occupant,
   PresenceHistoryItem,
   DutyShiftRecord,
+  UserProfileDetail,
 } from "../types";
 import {
   fetchOccupancy,
@@ -28,7 +29,9 @@ import {
   fetchPresenceHistory,
   fetchDutyHistory,
   resolveDisplayName,
+  fetchStudentProfile,
 } from "../api/client";
+import { UserDetailModal } from "../components/UserDetailModal";
 
 interface Props {
   user: User;
@@ -50,6 +53,10 @@ export interface UnifiedTimelineEvent {
   rawTimestamp: number;
   badge: string;
   status: "success" | "danger" | "neutral" | "info";
+  studentId?: string;
+  studentName?: string;
+  isSystemUser?: boolean;
+  isValidMember?: boolean;
 }
 
 // ── Pure, Reliable Clock Formatter (Guarantees HH:MM:SS, prevents Android Intl bugs like '15:0') ─
@@ -95,6 +102,37 @@ export const DutyStationScreen: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [shiftDurationSeconds, setShiftDurationSeconds] = useState(0);
+
+  // User Profile Detail Modal state
+  const [selectedUser, setSelectedUser] = useState<UserProfileDetail | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  const handleOpenProfile = async (studentId: string, isSystemUser?: boolean) => {
+    if (!isSystemUser) {
+      Alert.alert(
+        "Chưa có tài khoản",
+        `Sinh viên có mã số ${studentId} chưa được tạo tài khoản trên hệ thống.`
+      );
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const profile = await fetchStudentProfile(studentId);
+      if (profile) {
+        setSelectedUser(profile);
+        setDetailModalVisible(true);
+      } else {
+        Alert.alert(
+          "Thông báo",
+          `Không tìm thấy dữ liệu chi tiết cho tài khoản MSSV: ${studentId}.`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert("Lỗi", "Không thể tải thông tin người dùng.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const displayName = resolveDisplayName(user.name, user.email);
 
@@ -216,8 +254,12 @@ export const DutyStationScreen: React.FC<Props> = ({
         subtitle: `Quét bởi: ${resolveDisplayName(p.scanner_name)}`,
         timeString: formatClockTime(inMs),
         rawTimestamp: isNaN(inMs) ? Date.now() : inMs,
-        badge: p.is_valid_member ? "Hợp lệ" : "Ngoài tổ chức",
+        badge: p.is_valid_member ? "Trong tổ chức" : "Ngoài tổ chức",
         status: p.is_valid_member ? "success" : "danger",
+        studentId: p.student_id,
+        studentName: p.student_name,
+        isSystemUser: p.is_system_user,
+        isValidMember: p.is_valid_member,
       });
 
       if (p.check_out_at) {
@@ -232,6 +274,10 @@ export const DutyStationScreen: React.FC<Props> = ({
           rawTimestamp: isNaN(outMs) ? Date.now() : outMs,
           badge: "Rời phòng",
           status: "neutral",
+          studentId: p.student_id,
+          studentName: p.student_name,
+          isSystemUser: p.is_system_user,
+          isValidMember: p.is_valid_member,
         });
       }
     });
@@ -623,8 +669,21 @@ export const DutyStationScreen: React.FC<Props> = ({
 
                   {unifiedTimeline.map((item, index) => {
                     const isLast = index === unifiedTimeline.length - 1;
+                    const isCheckIn = item.type === "CHECK_IN";
+                    const isClickable = isCheckIn && !!item.studentId;
+
                     return (
-                      <View key={item.id} style={[styles.timelineNodeRow, isLast && { paddingBottom: 0 }]}>
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.timelineNodeRow, isLast && { paddingBottom: 0 }]}
+                        onPress={() => {
+                          if (item.studentId) {
+                            handleOpenProfile(item.studentId, item.isSystemUser);
+                          }
+                        }}
+                        disabled={!isClickable}
+                        activeOpacity={0.7}
+                      >
                         {/* Node Bullet */}
                         <View
                           style={[
@@ -638,9 +697,14 @@ export const DutyStationScreen: React.FC<Props> = ({
                         {/* Node Content */}
                         <View style={styles.timelineNodeContent}>
                           <View style={styles.timelineMainRow}>
-                            <Text style={styles.timelineItemTitle} numberOfLines={1}>
-                              {item.title}
-                            </Text>
+                            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={styles.timelineItemTitle} numberOfLines={1}>
+                                {item.title}
+                              </Text>
+                              {isClickable && item.isSystemUser && (
+                                <Text style={styles.detailCaretText}>Chi tiết ›</Text>
+                              )}
+                            </View>
                             <Text style={styles.timelineItemClock}>{item.timeString}</Text>
                           </View>
 
@@ -648,28 +712,67 @@ export const DutyStationScreen: React.FC<Props> = ({
                             <Text style={styles.timelineItemSubtitle} numberOfLines={1}>
                               {item.subtitle}
                             </Text>
-                            <View
-                              style={[
-                                styles.timelineBadge,
-                                item.status === "success" && styles.timelineBadgeSuccess,
-                                item.status === "danger" && styles.timelineBadgeDanger,
-                                item.status === "neutral" && styles.timelineBadgeNeutral,
-                              ]}
-                            >
-                              <Text
+
+                            {isCheckIn ? (
+                              <View style={styles.tagsContainer}>
+                                {/* Tag 1: Tài khoản hệ thống */}
+                                <View
+                                  style={[
+                                    styles.pillTag,
+                                    item.isSystemUser ? styles.pillTagSystemActive : styles.pillTagSystemNone,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.pillTagText,
+                                      item.isSystemUser ? styles.pillTagTextSystemActive : styles.pillTagTextSystemNone,
+                                    ]}
+                                  >
+                                    {item.isSystemUser ? "Có tài khoản" : "Chưa có tài khoản"}
+                                  </Text>
+                                </View>
+
+                                {/* Tag 2: Tổ chức */}
+                                <View
+                                  style={[
+                                    styles.pillTag,
+                                    item.isValidMember ? styles.pillTagOrgMember : styles.pillTagOrgNonMember,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.pillTagText,
+                                      item.isValidMember ? styles.pillTagTextOrgMember : styles.pillTagTextOrgNonMember,
+                                    ]}
+                                  >
+                                    {item.isValidMember ? "Trong tổ chức" : "Ngoài tổ chức"}
+                                  </Text>
+                                </View>
+                              </View>
+                            ) : (
+                              <View
                                 style={[
-                                  styles.timelineBadgeText,
-                                  item.status === "success" && styles.timelineBadgeTextSuccess,
-                                  item.status === "danger" && styles.timelineBadgeTextDanger,
-                                  item.status === "neutral" && styles.timelineBadgeTextNeutral,
+                                  styles.timelineBadge,
+                                  item.status === "success" && styles.timelineBadgeSuccess,
+                                  item.status === "danger" && styles.timelineBadgeDanger,
+                                  item.status === "neutral" && styles.timelineBadgeNeutral,
                                 ]}
                               >
-                                {item.badge}
-                              </Text>
-                            </View>
+                                <Text
+                                  style={[
+                                    styles.timelineBadgeText,
+                                    item.status === "success" && styles.timelineBadgeTextSuccess,
+                                    item.status === "danger" && styles.timelineBadgeTextDanger,
+                                    item.status === "neutral" && styles.timelineBadgeTextNeutral,
+                                  ]}
+                                >
+                                  {item.badge}
+                                </Text>
+                              </View>
+                            )}
                           </View>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
 
@@ -704,7 +807,11 @@ export const DutyStationScreen: React.FC<Props> = ({
               ) : (
                 occupants.map((occ) => (
                   <View key={occ.student_id} style={styles.occupantRow}>
-                    <View style={{ flex: 1 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => handleOpenProfile(occ.student_id, occ.is_system_user)}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.occupantHeader}>
                         <Text style={styles.occupantTitle}>{occ.student_name}</Text>
                         {occ.is_on_duty && (
@@ -712,11 +819,49 @@ export const DutyStationScreen: React.FC<Props> = ({
                             <Text style={styles.dutyTagText}>Trực phòng</Text>
                           </View>
                         )}
+                        {occ.is_system_user && (
+                          <Text style={styles.occupantDetailLink}>Xem hồ sơ ›</Text>
+                        )}
                       </View>
+
+                      {/* 2 Tags: Hệ thống & Tổ chức */}
+                      <View style={styles.occupantTagsRow}>
+                        <View
+                          style={[
+                            styles.pillTag,
+                            occ.is_system_user ? styles.pillTagSystemActive : styles.pillTagSystemNone,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.pillTagText,
+                              occ.is_system_user ? styles.pillTagTextSystemActive : styles.pillTagTextSystemNone,
+                            ]}
+                          >
+                            {occ.is_system_user ? "Có tài khoản" : "Chưa có tài khoản"}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.pillTag,
+                            occ.is_valid_member ? styles.pillTagOrgMember : styles.pillTagOrgNonMember,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.pillTagText,
+                              occ.is_valid_member ? styles.pillTagTextOrgMember : styles.pillTagTextOrgNonMember,
+                            ]}
+                          >
+                            {occ.is_valid_member ? "Trong tổ chức" : "Ngoài tổ chức"}
+                          </Text>
+                        </View>
+                      </View>
+
                       <Text style={styles.occupantSubtitle}>
                         MSSV: {occ.student_id} · Vào lúc {formatClockTime(occ.check_in_at)}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.checkoutBtn}
@@ -777,6 +922,13 @@ export const DutyStationScreen: React.FC<Props> = ({
             </View>
           )}
         </ScrollView>
+
+        {/* ── Full Student Profile Card Modal (Web Parity) ────────────────── */}
+        <UserDetailModal
+          visible={detailModalVisible}
+          user={selectedUser}
+          onClose={() => setDetailModalVisible(false)}
+        />
       </View>
     </SafeAreaView>
   );
@@ -1277,6 +1429,67 @@ const styles = StyleSheet.create({
   },
   timelineBadgeTextNeutral: {
     color: "#64748B",
+  },
+  detailCaretText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "wrap",
+  },
+  occupantTagsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginVertical: 3,
+  },
+  occupantDetailLink: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#2563EB",
+    marginLeft: 4,
+  },
+  pillTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  pillTagText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  pillTagSystemActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  pillTagTextSystemActive: {
+    color: "#1D4ED8",
+  },
+  pillTagSystemNone: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+  pillTagTextSystemNone: {
+    color: "#64748B",
+  },
+  pillTagOrgMember: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  pillTagTextOrgMember: {
+    color: "#047857",
+  },
+  pillTagOrgNonMember: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  pillTagTextOrgNonMember: {
+    color: "#B45309",
   },
   loadMoreBtn: {
     alignItems: "center",

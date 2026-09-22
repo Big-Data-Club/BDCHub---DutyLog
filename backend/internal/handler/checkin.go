@@ -17,7 +17,9 @@ import (
 )
 
 // performCheckinDB writes a presence log row and updates the Redis active sorted set.
-// It verifies whether the student belongs to the organization and logs scanner identity.
+// performCheckinDB writes a presence log row and updates the Redis active sorted set.
+// It verifies whether the student exists on the system, belongs to the organization,
+// and enforces strict deduplication against rapid double-scanning.
 func performCheckinDB(
 	ctx context.Context,
 	db *sql.DB,
@@ -39,29 +41,83 @@ func performCheckinDB(
 		return nil, fmt.Errorf("room lookup: %w", err)
 	}
 
-	// 2. Verify Membership in current Organization
-	var isValidMember = true
-	var alertColor = "GREEN"
-	var alertMessage = "Xác nhận hợp lệ: Thành viên thuộc tổ chức"
+	// 2. Strict Deduplication Guard:
+	// Prevent duplicate check-in if student checked in within last 30 seconds
+	// or currently has an active un-checked-out presence log in this room.
+	var existingID int64
+	var existingCheckInAt time.Time
+	var existingName string
+	var existingValidMember bool
+	var existingSystemUser bool
+	dedupErr := db.QueryRowContext(ctx, `
+		SELECT id, check_in_at, student_name, is_valid_member, COALESCE(is_system_user, is_valid_member)
+		FROM duty_presence_logs
+		WHERE room_id = $1 AND student_id = $2
+		  AND (check_out_at IS NULL OR check_in_at >= $3)
+		ORDER BY check_in_at DESC LIMIT 1
+	`, roomID, studentID, now.Add(-30*time.Second)).Scan(&existingID, &existingCheckInAt, &existingName, &existingValidMember, &existingSystemUser)
+
+	if dedupErr == nil && existingID > 0 {
+		redisKey := fmt.Sprintf("dutylog:room:%s:active", roomID)
+		occupancy, _ := rds.ZCard(ctx, redisKey).Result()
+		log.Printf("[CHECKIN_DEDUP] Duplicate scan suppressed for student %s in room %s (original at %s)",
+			studentID, roomID, existingCheckInAt.Format(time.RFC3339))
+
+		alertColor := "GREEN"
+		alertMsg := fmt.Sprintf("Đã điểm danh vào phòng lúc %s (Đã bỏ qua quét trùng lặp)", existingCheckInAt.Format("15:04:05"))
+		if !existingValidMember {
+			alertColor = "RED"
+			alertMsg = fmt.Sprintf("Mã số %s đã được ghi nhận lúc %s (Ngoài tổ chức, bỏ qua quét trùng)", studentID, existingCheckInAt.Format("15:04:05"))
+		}
+
+		return &model.CheckInResponse{
+			Success:              true,
+			PresenceID:           existingID,
+			RoomID:               roomID,
+			StudentID:            studentID,
+			StudentName:          existingName,
+			CheckInAt:            existingCheckInAt,
+			IsOnDuty:             false,
+			CurrentRoomOccupancy: int(occupancy),
+			IsValidMember:        existingValidMember,
+			IsSystemUser:         existingSystemUser,
+			AlertColor:           alertColor,
+			AlertMessage:         alertMsg,
+			ScannerID:            scannerID,
+			ScannerName:          scannerName,
+		}, nil
+	}
+
+	// 3. Verify Real User Existence & Membership in current Organization (NO HARDCODING)
+	var isValidMember = false
+	var isSystemUser = false
+	var alertColor = "RED"
+	var alertMessage = fmt.Sprintf("Mã số %s chưa có trên hệ thống", studentID)
 
 	if syncService != nil {
-		isMember, memberName, _, vErr := syncService.VerifyMembership(ctx, orgID, studentID)
+		verifyRes, vErr := syncService.VerifyUser(ctx, orgID, studentID)
 		if vErr != nil {
 			log.Printf("[CHECKIN] Membership verification check error: %v", vErr)
-		} else if !isMember {
-			isValidMember = false
-			alertColor = "RED"
-			alertMessage = fmt.Sprintf("CẢNH BÁO: Mã sinh viên %s KHÔNG thuộc tổ chức này!", studentID)
 		} else {
-			isValidMember = true
-			if memberName != "" && (studentName == "" || strings.HasPrefix(studentName, "Student ")) {
-				studentName = memberName
+			isValidMember = verifyRes.IsMember
+			isSystemUser = verifyRes.IsSystemUser
+			if verifyRes.FullName != "" && (studentName == "" || strings.HasPrefix(studentName, "Student ")) {
+				studentName = verifyRes.FullName
 			}
-			alertMessage = fmt.Sprintf("Xác nhận hợp lệ: %s thuộc tổ chức", studentName)
+			if isValidMember {
+				alertColor = "GREEN"
+				alertMessage = fmt.Sprintf("Xác nhận hợp lệ: %s thuộc tổ chức", studentName)
+			} else if isSystemUser {
+				alertColor = "RED"
+				alertMessage = fmt.Sprintf("Người dùng %s đã có tài khoản trên hệ thống nhưng KHÔNG thuộc tổ chức này", studentName)
+			} else {
+				alertColor = "RED"
+				alertMessage = fmt.Sprintf("Mã số %s chưa có tài khoản trên hệ thống và ngoài tổ chức", studentID)
+			}
 		}
 	}
 
-	// 3. Determine whether this student is on a scheduled duty shift right now
+	// 4. Determine whether this student is on a scheduled duty shift right now
 	var isOnDuty bool
 	weekday := int(now.Weekday())
 	if weekday == 0 {
@@ -84,28 +140,28 @@ func performCheckinDB(
 		isOnDuty = false
 	}
 
-	// 4. Insert presence log with scanner identity and validity flag
+	// 5. Insert presence log with scanner identity, validity flag, and system user flag
 	var presenceID int64
 	err = db.QueryRowContext(ctx, `
 		INSERT INTO duty_presence_logs
-			(organization_id, room_id, student_id, student_name, check_in_at, scan_method, is_on_duty, scanner_id, scanner_name, is_valid_member)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			(organization_id, room_id, student_id, student_name, check_in_at, scan_method, is_on_duty, scanner_id, scanner_name, is_valid_member, is_system_user)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id
-	`, orgID, roomID, studentID, studentName, now, scanMethod, isOnDuty, scannerID, scannerName, isValidMember).Scan(&presenceID)
+	`, orgID, roomID, studentID, studentName, now, scanMethod, isOnDuty, scannerID, scannerName, isValidMember, isSystemUser).Scan(&presenceID)
 	if err != nil {
 		return nil, fmt.Errorf("insert presence log: %w", err)
 	}
 
-	// 5. Add to Redis ZSET: dutylog:room:{room_id}:active
-	//    Member format: "{student_id}:{student_name}:{scan_method}:{is_valid_member}"
+	// 6. Add to Redis ZSET: dutylog:room:{room_id}:active
+	//    Member format: "{student_id}:{student_name}:{scan_method}:{is_valid_member}:{is_system_user}"
 	redisKey := fmt.Sprintf("dutylog:room:%s:active", roomID)
-	member := fmt.Sprintf("%s:%s:%s:%t", studentID, studentName, scanMethod, isValidMember)
+	member := fmt.Sprintf("%s:%s:%s:%t:%t", studentID, studentName, scanMethod, isValidMember, isSystemUser)
 	rds.ZAdd(ctx, redisKey, redis.Z{
 		Score:  float64(now.UnixMilli()),
 		Member: member,
 	})
 
-	// 6. Live occupancy count
+	// 7. Live occupancy count
 	occupancy, _ := rds.ZCard(ctx, redisKey).Result()
 
 	return &model.CheckInResponse{
@@ -118,6 +174,7 @@ func performCheckinDB(
 		IsOnDuty:             isOnDuty,
 		CurrentRoomOccupancy: int(occupancy),
 		IsValidMember:        isValidMember,
+		IsSystemUser:         isSystemUser,
 		AlertColor:           alertColor,
 		AlertMessage:         alertMessage,
 		ScannerID:            scannerID,
@@ -256,12 +313,17 @@ func HandleGetOccupancy(rds *redis.Client) gin.HandlerFunc {
 			if len(parts) >= 4 {
 				isValid = (parts[3] == "true")
 			}
+			isSysUser := isValid
+			if len(parts) >= 5 {
+				isSysUser = (parts[4] == "true")
+			}
 			occupants = append(occupants, model.RoomOccupant{
 				StudentID:     parts[0],
 				StudentName:   parts[1],
 				CheckInAt:     time.UnixMilli(int64(z.Score)).UTC(),
 				IsOnDuty:      false,
 				IsValidMember: isValid,
+				IsSystemUser:  isSysUser,
 			})
 		}
 
@@ -269,6 +331,33 @@ func HandleGetOccupancy(rds *redis.Client) gin.HandlerFunc {
 			RoomID:         roomID,
 			OccupancyCount: len(occupants),
 			Occupants:      occupants,
+		})
+	}
+}
+
+// HandleGetStudentProfile returns full profile of a user if registered on the system.
+// Matches the information card displayed on the web dashboard.
+// GET /api/v1/students/:student_id/profile
+func HandleGetStudentProfile(db *sql.DB, syncService *dutySync.OrgSyncService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		studentID := c.Param("student_id")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		if syncService != nil {
+			profile, err := syncService.GetStudentProfile(ctx, studentID)
+			if err == nil && profile != nil {
+				c.JSON(http.StatusOK, gin.H{
+					"exists_on_system": true,
+					"profile":          profile,
+				})
+				return
+			}
+		}
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"exists_on_system": false,
+			"error":            "Người dùng chưa có tài khoản trên hệ thống",
 		})
 	}
 }

@@ -177,6 +177,17 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("V002 migration: %w", err)
 	}
 
+	v003 := `
+	ALTER TABLE duty_presence_logs ADD COLUMN IF NOT EXISTS is_system_user BOOLEAN NOT NULL DEFAULT false;
+	CREATE INDEX IF NOT EXISTS idx_presence_system_user ON duty_presence_logs(room_id, is_system_user);
+	CREATE INDEX IF NOT EXISTS idx_presence_dedup ON duty_presence_logs(room_id, student_id, check_in_at DESC);
+	UPDATE duty_presence_logs SET is_system_user = true WHERE is_valid_member = true;
+	`
+
+	if _, err := db.Exec(v003); err != nil {
+		return fmt.Errorf("V003 migration: %w", err)
+	}
+
 	log.Println("[DB] Migrations applied successfully")
 	return nil
 }

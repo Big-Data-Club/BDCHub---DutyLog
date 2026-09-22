@@ -85,6 +85,9 @@ func main() {
 		api.GET("/rooms/:room_id/presence-history", handler.HandleAdminRoomPresenceHistory(db))
 		api.GET("/rooms/:room_id/duty-history", handler.HandleAdminRoomDutyHistory(db))
 
+		// ── Student / User Profile Flow (Web card inspection on mobile) ───────
+		api.GET("/students/:student_id/profile", handler.HandleGetStudentProfile(db, syncService))
+
 		// ── QR flow ───────────────────────────────────────────────────────────
 		// Generate a 10-second rotating QR token (called by student device)
 		api.POST("/qr/generate", handler.HandleGenerateQR(redisClient))

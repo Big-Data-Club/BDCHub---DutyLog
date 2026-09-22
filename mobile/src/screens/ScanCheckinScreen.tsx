@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,19 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Alert,
   StatusBar as RNStatusBar,
 } from "react-native";
 import { BarCodeScanner } from "expo-barcode-scanner";
-import { Room, CheckInResult, CheckOutResult } from "../types";
-import { performCheckIn, performCheckOut, performQRCheckin, resolveDisplayName } from "../api/client";
+import { Room, CheckInResult, CheckOutResult, UserProfileDetail } from "../types";
+import {
+  performCheckIn,
+  performCheckOut,
+  performQRCheckin,
+  resolveDisplayName,
+  fetchStudentProfile,
+} from "../api/client";
+import { UserDetailModal } from "../components/UserDetailModal";
 
 interface Props {
   room: Room;
@@ -35,9 +43,21 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     type: "SUCCESS" | "WARNING" | "ERROR";
     title: string;
     message: string;
+    studentId?: string;
+    studentName?: string;
+    isValidMember?: boolean;
+    isSystemUser?: boolean;
   } | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
+
+  // Profile modal states
+  const [selectedUser, setSelectedUser] = useState<UserProfileDetail | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+
+  // Anti-duplicate scan lock: stores { code, time }
+  const lastScanRef = useRef<{ code: string; time: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -46,16 +66,51 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     })();
   }, []);
 
+  const handleOpenProfile = async (studentId: string) => {
+    if (!studentId) return;
+    setLoadingProfile(true);
+    try {
+      const profile = await fetchStudentProfile(studentId);
+      if (profile) {
+        setSelectedUser(profile);
+        setDetailModalVisible(true);
+      } else {
+        Alert.alert(
+          "Thông báo",
+          `Không tìm thấy dữ liệu chi tiết cho tài khoản MSSV: ${studentId}.`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert("Lỗi", "Không thể tải thông tin người dùng.");
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
   const handleBarcodeScan = ({ data }: { type: string; data: string }) => {
-    if (scanning) return; // debounce
+    const trimmed = (data || "").trim();
+    if (!trimmed) return;
+    const now = Date.now();
+
+    // Prevent duplicate rescanning of the exact same code within 12 seconds
+    if (
+      lastScanRef.current &&
+      lastScanRef.current.code === trimmed &&
+      now - lastScanRef.current.time < 12000
+    ) {
+      return;
+    }
+
+    if (scanning) return; // debounce active scan cycle
     setScanning(true);
-    setTimeout(() => setScanning(false), 2200); // 2.2s cooldown
+    lastScanRef.current = { code: trimmed, time: now };
+    setTimeout(() => setScanning(false), 2500);
 
     // Detect if it's a signed QR token payload or regular barcode
-    if (data.includes(".") && data.split(".").length === 2) {
-      handleQRSubmit(data);
+    if (trimmed.includes(".") && trimmed.split(".").length === 2) {
+      handleQRSubmit(trimmed);
     } else {
-      handleScanOrSubmit(data);
+      handleScanOrSubmit(trimmed);
     }
   };
 
@@ -66,26 +121,15 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     try {
       if (scanMode === "CHECK_IN") {
         const result = await performQRCheckin(room.id, payload);
-        const is2312438 =
-          payload.includes("2312438") ||
-          result.student_id === "2312438" ||
-          result.student_name.toLowerCase().includes("nhan.nguyen");
-
-        if (is2312438 || result.is_valid_member) {
-          const studentName = is2312438 ? "Nguyễn Phúc Nhân" : result.student_name;
-          const studentId = is2312438 ? "2312438" : result.student_id;
-          setLastResult({
-            type: "SUCCESS",
-            title: "Xác nhận hợp lệ",
-            message: `${studentName} (${studentId}) đã điểm danh vào phòng`,
-          });
-        } else {
-          setLastResult({
-            type: "WARNING",
-            title: "Không thuộc tổ chức",
-            message: `Mã số ${result.student_id} không thuộc danh sách thành viên`,
-          });
-        }
+        setLastResult({
+          type: result.is_valid_member ? "SUCCESS" : "WARNING",
+          title: result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức",
+          message: `${result.student_name} (${result.student_id}) đã ghi nhận vào phòng`,
+          studentId: result.student_id,
+          studentName: result.student_name,
+          isValidMember: result.is_valid_member,
+          isSystemUser: result.is_system_user,
+        });
         setManualInput("");
         onSuccess();
       } else {
@@ -107,7 +151,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
   };
 
   const handleScanOrSubmit = async (studentIdToProcess?: string) => {
-    const rawId = studentIdToProcess || manualInput.trim();
+    const rawId = (studentIdToProcess || manualInput).trim();
     if (!rawId) return;
 
     setLoading(true);
@@ -116,26 +160,15 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     try {
       if (scanMode === "CHECK_IN") {
         const result: CheckInResult = await performCheckIn(room.id, rawId);
-        const is2312438 =
-          rawId === "2312438" ||
-          result.student_id === "2312438" ||
-          result.student_name.toLowerCase().includes("nhan.nguyen");
-
-        if (is2312438 || result.is_valid_member) {
-          const studentName = is2312438 ? "Nguyễn Phúc Nhân" : result.student_name;
-          const studentId = is2312438 ? "2312438" : result.student_id;
-          setLastResult({
-            type: "SUCCESS",
-            title: "Xác nhận hợp lệ",
-            message: `${studentName} (${studentId}) đã điểm danh vào phòng`,
-          });
-        } else {
-          setLastResult({
-            type: "WARNING",
-            title: "Không thuộc tổ chức",
-            message: `Mã số ${result.student_id} không thuộc danh sách thành viên`,
-          });
-        }
+        setLastResult({
+          type: result.is_valid_member ? "SUCCESS" : "WARNING",
+          title: result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức",
+          message: `${result.student_name} (${result.student_id}) đã ghi nhận vào phòng`,
+          studentId: result.student_id,
+          studentName: result.student_name,
+          isValidMember: result.is_valid_member,
+          isSystemUser: result.is_system_user,
+        });
       } else {
         const result: CheckOutResult = await performCheckOut(room.id, rawId);
         setLastResult({
@@ -214,6 +247,61 @@ export const ScanCheckinScreen: React.FC<Props> = ({
               >
                 {lastResult.message}
               </Text>
+
+              {/* ── 2 Tags: System User & Organization Membership ────────── */}
+              {(lastResult.isSystemUser !== undefined || lastResult.isValidMember !== undefined) && (
+                <View style={styles.feedbackTagsRow}>
+                  {/* Tag 1: Hệ thống */}
+                  <View
+                    style={[
+                      styles.tagBadge,
+                      lastResult.isSystemUser ? styles.tagBadgeSystemActive : styles.tagBadgeSystemNone,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tagBadgeText,
+                        lastResult.isSystemUser ? styles.tagBadgeTextSystemActive : styles.tagBadgeTextSystemNone,
+                      ]}
+                    >
+                      {lastResult.isSystemUser ? "✓ Đã có tài khoản" : "✕ Chưa có tài khoản"}
+                    </Text>
+                  </View>
+
+                  {/* Tag 2: Tổ chức */}
+                  <View
+                    style={[
+                      styles.tagBadge,
+                      lastResult.isValidMember ? styles.tagBadgeOrgMember : styles.tagBadgeOrgNonMember,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tagBadgeText,
+                        lastResult.isValidMember ? styles.tagBadgeTextOrgMember : styles.tagBadgeTextOrgNonMember,
+                      ]}
+                    >
+                      {lastResult.isValidMember ? "✓ Trong tổ chức" : "⚠ Ngoài tổ chức"}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* View Profile Action (Only if user exists on system) */}
+              {lastResult.isSystemUser && lastResult.studentId && (
+                <TouchableOpacity
+                  style={styles.viewDetailBtn}
+                  onPress={() => handleOpenProfile(lastResult.studentId!)}
+                  disabled={loadingProfile}
+                  activeOpacity={0.7}
+                >
+                  {loadingProfile ? (
+                    <ActivityIndicator size="small" color="#2563EB" />
+                  ) : (
+                    <Text style={styles.viewDetailBtnText}>Xem chi tiết người dùng ›</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -344,7 +432,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
           <View style={styles.manualInputRow}>
             <TextInput
               style={styles.textInput}
-              placeholder="VD: 2312438"
+              placeholder="Nhập MSSV..."
               placeholderTextColor="#94A3B8"
               value={manualInput}
               onChangeText={setManualInput}
@@ -369,6 +457,13 @@ export const ScanCheckinScreen: React.FC<Props> = ({
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* ── Full Student Profile Card Modal (Web Parity) ────────────────── */}
+        <UserDetailModal
+          visible={detailModalVisible}
+          user={selectedUser}
+          onClose={() => setDetailModalVisible(false)}
+        />
       </View>
     </SafeAreaView>
   );
@@ -479,6 +574,65 @@ const styles = StyleSheet.create({
   },
   feedbackDescError: {
     color: "#9F1239",
+  },
+  feedbackTagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  tagBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  tagBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  tagBadgeSystemActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  tagBadgeTextSystemActive: {
+    color: "#1D4ED8",
+  },
+  tagBadgeSystemNone: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+  tagBadgeTextSystemNone: {
+    color: "#64748B",
+  },
+  tagBadgeOrgMember: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  tagBadgeTextOrgMember: {
+    color: "#047857",
+  },
+  tagBadgeOrgNonMember: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  tagBadgeTextOrgNonMember: {
+    color: "#B45309",
+  },
+  viewDetailBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  viewDetailBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2563EB",
   },
 
   // ── Controls Row ─────────────────────────────────────────────────────────

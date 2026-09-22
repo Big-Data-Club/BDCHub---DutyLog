@@ -39,6 +39,7 @@ type CheckInResponse struct {
 	IsOnDuty             bool      `json:"is_on_duty"`
 	CurrentRoomOccupancy int       `json:"current_room_occupancy"`
 	IsValidMember        bool      `json:"is_valid_member"`
+	IsSystemUser         bool      `json:"is_system_user"`
 	AlertColor           string    `json:"alert_color"` // "GREEN" or "RED"
 	AlertMessage         string    `json:"alert_message"`
 	ScannerID            string    `json:"scanner_id,omitempty"`
@@ -60,6 +61,7 @@ type RoomOccupant struct {
 	CheckInAt     time.Time `json:"check_in_at"`
 	IsOnDuty      bool      `json:"is_on_duty"`
 	IsValidMember bool      `json:"is_valid_member"`
+	IsSystemUser  bool      `json:"is_system_user"`
 }
 
 type RoomOccupancyResponse struct {
@@ -106,6 +108,7 @@ type PresenceHistoryItem struct {
 	ScannerID       string     `json:"scanner_id"`
 	ScannerName     string     `json:"scanner_name"`
 	IsValidMember   bool       `json:"is_valid_member"`
+	IsSystemUser    bool       `json:"is_system_user"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
@@ -132,4 +135,22 @@ type KafkaPresenceEvent struct {
 	ScannerID       string     `json:"scanner_id,omitempty"`
 	ScannerName     string     `json:"scanner_name,omitempty"`
 	IsValidMember   bool       `json:"is_valid_member"`
+	IsSystemUser    bool       `json:"is_system_user"`
+}
+
+type StudentProfile struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Email          string   `json:"email"`
+	Code           string   `json:"code"`
+	Role           string   `json:"role"`
+	Roles          []string `json:"roles,omitempty"`
+	Team           string   `json:"team"`
+	Type           string   `json:"type"`
+	Score          int      `json:"score"`
+	DateAdded      string   `json:"date_added,omitempty"`
+	Status         bool     `json:"status"`
+	ProfilePicture string   `json:"profile_picture,omitempty"`
+	Organization   string   `json:"organization,omitempty"`
+	Organizations  []string `json:"organizations,omitempty"`
 }
