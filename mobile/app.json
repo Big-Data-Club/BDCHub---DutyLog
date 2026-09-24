@@ -1,14 +1,15 @@
 {
   "expo": {
-    "name": "CLBCheckin",
-    "slug": "clbcheckin",
+    "name": "BDCHub - DutyLog",
+    "slug": "bdchub-dutylog",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1E3A8A"
+      "backgroundColor": "#F8FAFC"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,12 +18,17 @@
       }
     },
     "android": {
+      "package": "com.bigdataclub.clbcheckin",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1E3A8A"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "CAMERA",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -31,7 +37,14 @@
         {
           "cameraPermission": "Grant camera access to scan student identity cards."
         }
-      ]
-    ]
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "51fc0040-e926-4e40-b7bb-bceccc323d92"
+      }
+    },
+    "owner": "phucnhan"
   }
 }

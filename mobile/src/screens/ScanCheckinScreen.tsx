@@ -66,6 +66,15 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     })();
   }, []);
 
+  // Auto-dismiss last scan result banner after 6 seconds
+  useEffect(() => {
+    if (!lastResult) return;
+    const timer = setTimeout(() => {
+      setLastResult(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [lastResult]);
+
   const handleOpenProfile = async (studentId: string) => {
     if (!studentId) return;
     setLoadingProfile(true);
@@ -121,12 +130,17 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     try {
       if (scanMode === "CHECK_IN") {
         const result = await performQRCheckin(room.id, payload);
+        const sName = result.student_name || (result.student_id ? `MSSV: ${result.student_id}` : "Sinh viên");
+        const sId = result.student_id || "";
+        const title = result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức";
+        const message = result.alert_message || `${sName} (${sId}) đã ghi nhận vào phòng`;
+
         setLastResult({
           type: result.is_valid_member ? "SUCCESS" : "WARNING",
-          title: result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức",
-          message: `${result.student_name} (${result.student_id}) đã ghi nhận vào phòng`,
-          studentId: result.student_id,
-          studentName: result.student_name,
+          title,
+          message,
+          studentId: sId,
+          studentName: sName,
           isValidMember: result.is_valid_member,
           isSystemUser: result.is_system_user,
         });
@@ -160,12 +174,17 @@ export const ScanCheckinScreen: React.FC<Props> = ({
     try {
       if (scanMode === "CHECK_IN") {
         const result: CheckInResult = await performCheckIn(room.id, rawId);
+        const sName = result.student_name || (result.student_id ? `MSSV: ${result.student_id}` : "Sinh viên");
+        const sId = result.student_id || rawId;
+        const title = result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức";
+        const message = result.alert_message || `${sName} (${sId}) đã ghi nhận vào phòng`;
+
         setLastResult({
           type: result.is_valid_member ? "SUCCESS" : "WARNING",
-          title: result.is_valid_member ? "Điểm danh hợp lệ" : "Ngoài tổ chức",
-          message: `${result.student_name} (${result.student_id}) đã ghi nhận vào phòng`,
-          studentId: result.student_id,
-          studentName: result.student_name,
+          title,
+          message,
+          studentId: sId,
+          studentName: sName,
           isValidMember: result.is_valid_member,
           isSystemUser: result.is_system_user,
         });
@@ -174,7 +193,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
         setLastResult({
           type: "SUCCESS",
           title: "Check-out thành công",
-          message: `Sinh viên ${result.student_id} đã rời phòng (Thời gian: ${Math.round(
+          message: `Sinh viên ${result.student_id || rawId} đã rời phòng (Thời gian: ${Math.round(
             (result.duration_seconds || 1800) / 60
           )} phút)`,
         });
@@ -226,17 +245,26 @@ export const ScanCheckinScreen: React.FC<Props> = ({
               lastResult.type === "ERROR" && styles.feedbackError,
             ]}
           >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.feedbackTitle,
-                  lastResult.type === "SUCCESS" && styles.feedbackTextSuccess,
-                  lastResult.type === "WARNING" && styles.feedbackTextWarning,
-                  lastResult.type === "ERROR" && styles.feedbackTextError,
-                ]}
-              >
-                {lastResult.title}
-              </Text>
+            <View style={styles.feedbackContent}>
+              <View style={styles.feedbackHeaderRow}>
+                <Text
+                  style={[
+                    styles.feedbackTitle,
+                    lastResult.type === "SUCCESS" && styles.feedbackTextSuccess,
+                    lastResult.type === "WARNING" && styles.feedbackTextWarning,
+                    lastResult.type === "ERROR" && styles.feedbackTextError,
+                  ]}
+                >
+                  {lastResult.title || (lastResult.type === "SUCCESS" ? "Check-in thành công" : "Thông báo")}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setLastResult(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.feedbackCloseBtn}
+                >
+                  <Text style={styles.feedbackCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
               <Text
                 style={[
                   styles.feedbackDesc,
@@ -245,7 +273,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
                   lastResult.type === "ERROR" && styles.feedbackDescError,
                 ]}
               >
-                {lastResult.message}
+                {lastResult.message || "Đã xử lý thông tin quét"}
               </Text>
 
               {/* ── 2 Tags: System User & Organization Membership ────────── */}
@@ -536,6 +564,24 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
+    minHeight: 56,
+  },
+  feedbackContent: {
+    width: "100%",
+  },
+  feedbackHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  feedbackCloseBtn: {
+    padding: 2,
+    marginLeft: 8,
+  },
+  feedbackCloseBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#64748B",
   },
   feedbackSuccess: {
     backgroundColor: "#ECFDF5",
