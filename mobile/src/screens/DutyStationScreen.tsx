@@ -31,6 +31,11 @@ import {
   resolveDisplayName,
   fetchStudentProfile,
 } from "../api/client";
+import {
+  getStationCache,
+  updateStationCache,
+  subscribeToStationStore,
+} from "../api/stationStore";
 import { UserDetailModal } from "../components/UserDetailModal";
 
 interface Props {
@@ -84,28 +89,48 @@ export const DutyStationScreen: React.FC<Props> = ({
   const [scanType, setScanType] = useState<"BARCODE" | "QR_SCAN">("BARCODE");
   const [activeTab, setActiveTab] = useState<"TIMELINE" | "OCCUPANTS" | "SHIFTS">("TIMELINE");
 
-  // Data states
-  const [occupants, setOccupants] = useState<Occupant[]>([]);
-  const [presenceHistory, setPresenceHistory] = useState<PresenceHistoryItem[]>([]);
-  const [dutyHistory, setDutyHistory] = useState<DutyShiftRecord[]>([]);
-  const [activeShift, setActiveShift] = useState<DutyShiftRecord | null>(null);
+  // Persistent in-memory cache for room (preserves state across screen transitions in 0ms)
+  const cached = getStationCache(room.id);
 
-  // Dynamic live event logs (inserted instantly on UI actions)
-  const [liveEvents, setLiveEvents] = useState<UnifiedTimelineEvent[]>([]);
+  // Data states initialized from cache
+  const [occupants, setOccupants] = useState<Occupant[]>(cached.occupants);
+  const [presenceHistory, setPresenceHistory] = useState<PresenceHistoryItem[]>(cached.presenceHistory);
+  const [dutyHistory, setDutyHistory] = useState<DutyShiftRecord[]>(cached.dutyHistory);
+  const [activeShift, setActiveShift] = useState<DutyShiftRecord | null>(cached.activeShift);
 
   // Pagination states
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [historyOffset, setHistoryOffset] = useState(cached.historyOffset);
+  const [hasMoreHistory, setHasMoreHistory] = useState(cached.hasMoreHistory);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Loading states
-  const [loading, setLoading] = useState(false);
+  // Dynamic live event logs (fallback)
+  const [liveEvents, setLiveEvents] = useState<UnifiedTimelineEvent[]>([]);
+
+  // Loading state: ONLY true on cold first boot if there is zero cached data
+  const [loading, setLoading] = useState(
+    () => !cached.initialized && cached.presenceHistory.length === 0 && cached.dutyHistory.length === 0
+  );
   const [actionLoading, setActionLoading] = useState(false);
   const [shiftDurationSeconds, setShiftDurationSeconds] = useState(0);
 
   // User Profile Detail Modal state
   const [selectedUser, setSelectedUser] = useState<UserProfileDetail | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // Subscribe to station store for cross-screen reactivity (e.g. from Scanner screen)
+  useEffect(() => {
+    const unsub = subscribeToStationStore((updatedRoomId, data) => {
+      if (updatedRoomId === room.id) {
+        setOccupants(data.occupants);
+        setPresenceHistory(data.presenceHistory);
+        setDutyHistory(data.dutyHistory);
+        setActiveShift(data.activeShift);
+        setHistoryOffset(data.historyOffset);
+        setHasMoreHistory(data.hasMoreHistory);
+      }
+    });
+    return unsub;
+  }, [room.id]);
 
   const handleOpenProfile = async (studentId: string, isSystemUser?: boolean) => {
     if (!isSystemUser) {
@@ -137,7 +162,7 @@ export const DutyStationScreen: React.FC<Props> = ({
   const displayName = resolveDisplayName(user.name, user.email);
 
   useEffect(() => {
-    loadStationData(true);
+    silentSyncLatest();
   }, [room.id]);
 
   // Live timer ticker for active shift
@@ -157,84 +182,101 @@ export const DutyStationScreen: React.FC<Props> = ({
     };
   }, [activeShift]);
 
-  const loadStationData = async (isInitial: boolean = false, silent: boolean = false) => {
+  // ── Non-blocking, Silent Background Synchronization ──────────────────────
+  const silentSyncLatest = async () => {
     try {
-      if (isInitial && !silent && dutyHistory.length === 0 && presenceHistory.length === 0) {
-        setLoading(true);
-      }
-      const currentOffset = isInitial ? 0 : historyOffset;
-
       const [shiftRes, occList, histList, shiftsList] = await Promise.all([
         fetchCurrentShift(room.id).catch(() => null),
         fetchOccupancy(room.id).catch(() => null),
-        fetchPresenceHistory(room.id, PAGE_SIZE, currentOffset).catch(() => null),
-        fetchDutyHistory(room.id, PAGE_SIZE, currentOffset).catch(() => null),
+        fetchPresenceHistory(room.id, PAGE_SIZE, 0).catch(() => null),
+        fetchDutyHistory(room.id, PAGE_SIZE, 0).catch(() => null),
       ]);
 
-      // Only update active shift if server responded with a definitive state
-      if (shiftRes) {
-        if (shiftRes.has_active_shift && shiftRes.shift) {
-          setActiveShift(shiftRes.shift);
-        } else if (!shiftRes.has_active_shift) {
-          // If server says no active shift, do not clear if we currently have an in-flight optimistic shift
-          setActiveShift((prev) => (prev && prev.id < 0 ? prev : null));
+      updateStationCache(room.id, (prev) => {
+        let activeShift = prev.activeShift;
+        if (shiftRes) {
+          if (shiftRes.has_active_shift && shiftRes.shift) {
+            activeShift = shiftRes.shift;
+          } else if (!shiftRes.has_active_shift && (!activeShift || activeShift.id >= 0)) {
+            activeShift = null;
+          }
         }
-      }
 
-      // Only update occupants if fetch succeeded
-      if (occList !== null) {
-        setOccupants(occList);
-      }
+        const occupants = occList !== null ? occList : prev.occupants;
 
-      // Upsert and smart-merge duty history (never wipe existing records!)
-      if (shiftsList !== null && shiftsList.length > 0) {
-        setDutyHistory((prev) => {
-          const fetchedMap = new Map(shiftsList.map((s) => [s.id, s]));
-          const updated = prev.map((s) => fetchedMap.get(s.id) || s);
+        let dutyHistory = prev.dutyHistory;
+        if (shiftsList !== null && shiftsList.length > 0) {
+          const map = new Map(shiftsList.map((s) => [s.id, s]));
+          const updated = prev.dutyHistory.map((s) => map.get(s.id) || s);
           const updatedIds = new Set(updated.map((s) => s.id));
           const newItems = shiftsList.filter((s) => !updatedIds.has(s.id));
-          return [...newItems, ...updated];
-        });
-        if (isInitial) {
-          setHistoryOffset(PAGE_SIZE);
-          setHasMoreHistory(shiftsList.length >= PAGE_SIZE);
+          dutyHistory = [...newItems, ...updated];
         }
-      }
 
-      // Upsert and smart-merge presence history (never wipe existing records!)
-      if (histList !== null && histList.length > 0) {
-        setPresenceHistory((prev) => {
-          const fetchedMap = new Map(histList.map((p) => [p.id, p]));
-          const updated = prev.map((p) => fetchedMap.get(p.id) || p);
+        let presenceHistory = prev.presenceHistory;
+        if (histList !== null && histList.length > 0) {
+          const map = new Map(histList.map((p) => [p.id, p]));
+          const updated = prev.presenceHistory.map((p) => map.get(p.id) || p);
           const updatedIds = new Set(updated.map((p) => p.id));
           const newItems = histList.filter((p) => !updatedIds.has(p.id));
-          return [...newItems, ...updated];
-        });
-        if (isInitial) {
-          setHistoryOffset(PAGE_SIZE);
-          setHasMoreHistory((prev) => prev || (histList && histList.length >= PAGE_SIZE));
+          presenceHistory = [...newItems, ...updated];
         }
-      }
 
-      if (!isInitial && (histList !== null || shiftsList !== null)) {
-        setHistoryOffset((prev) => prev + PAGE_SIZE);
-        setHasMoreHistory(
-          (histList ? histList.length >= PAGE_SIZE : false) ||
-          (shiftsList ? shiftsList.length >= PAGE_SIZE : false)
-        );
-      }
+        return {
+          activeShift,
+          occupants,
+          dutyHistory,
+          presenceHistory,
+          historyOffset: prev.historyOffset === 0 ? PAGE_SIZE : prev.historyOffset,
+          hasMoreHistory:
+            (histList ? histList.length >= PAGE_SIZE : false) ||
+            (shiftsList ? shiftsList.length >= PAGE_SIZE : false),
+          initialized: true,
+        };
+      });
     } catch (e) {
-      console.warn("Failed to load station data:", e);
+      console.warn("Silent sync failed:", e);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreHistory) return;
     setLoadingMore(true);
-    await loadStationData(false);
+    try {
+      const [histList, shiftsList] = await Promise.all([
+        fetchPresenceHistory(room.id, PAGE_SIZE, historyOffset).catch(() => null),
+        fetchDutyHistory(room.id, PAGE_SIZE, historyOffset).catch(() => null),
+      ]);
+
+      updateStationCache(room.id, (prev) => {
+        let dutyHistory = prev.dutyHistory;
+        if (shiftsList !== null && shiftsList.length > 0) {
+          const ids = new Set(prev.dutyHistory.map((s) => s.id));
+          dutyHistory = [...prev.dutyHistory, ...shiftsList.filter((s) => !ids.has(s.id))];
+        }
+
+        let presenceHistory = prev.presenceHistory;
+        if (histList !== null && histList.length > 0) {
+          const ids = new Set(prev.presenceHistory.map((p) => p.id));
+          presenceHistory = [...prev.presenceHistory, ...histList.filter((p) => !ids.has(p.id))];
+        }
+
+        return {
+          dutyHistory,
+          presenceHistory,
+          historyOffset: prev.historyOffset + PAGE_SIZE,
+          hasMoreHistory:
+            (histList ? histList.length >= PAGE_SIZE : false) ||
+            (shiftsList ? shiftsList.length >= PAGE_SIZE : false),
+        };
+      });
+    } catch (e) {
+      console.warn("Load more failed:", e);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   // ── Unified Chronological Timeline Synthesis (Sorted strictly newest to oldest) ──
@@ -342,9 +384,11 @@ export const DutyStationScreen: React.FC<Props> = ({
       created_at: new Date(nowMs).toISOString(),
     };
 
-    // 1. Write-Ahead Optimistic Updates (0ms latency)
-    setActiveShift(optimisticShift);
-    setDutyHistory((prev) => [optimisticShift, ...prev]);
+    // 1. Write-Ahead Optimistic Updates (0ms latency into global cache + reactive state)
+    updateStationCache(room.id, (prev) => ({
+      activeShift: optimisticShift,
+      dutyHistory: [optimisticShift, ...prev.dutyHistory],
+    }));
 
     // 2. Background Sync (asynchronous, non-blocking)
     try {
@@ -354,16 +398,18 @@ export const DutyStationScreen: React.FC<Props> = ({
         email: user.email,
       });
       // Replace temporary optimistic shift with confirmed server record
-      setActiveShift(shift);
-      setDutyHistory((prev) =>
-        prev.map((s) => (s.id === tempShiftId ? shift : s))
-      );
+      updateStationCache(room.id, (prev) => ({
+        activeShift: shift,
+        dutyHistory: prev.dutyHistory.map((s) => (s.id === tempShiftId ? shift : s)),
+      }));
       // Background silent data sync without full reload
-      loadStationData(false, true);
+      silentSyncLatest();
     } catch (err: any) {
       // Rollback on failure
-      setActiveShift(null);
-      setDutyHistory((prev) => prev.filter((s) => s.id !== tempShiftId));
+      updateStationCache(room.id, (prev) => ({
+        activeShift: null,
+        dutyHistory: prev.dutyHistory.filter((s) => s.id !== tempShiftId),
+      }));
       Alert.alert("Lỗi", err.message || "Không thể bắt đầu ca trực");
     }
   };
@@ -385,9 +431,9 @@ export const DutyStationScreen: React.FC<Props> = ({
             const durationSecs = Math.max(1, Math.round((nowMs - startMs) / 1000));
 
             // 1. Write-Ahead Optimistic Updates (0ms latency)
-            setActiveShift(null);
-            setDutyHistory((prev) =>
-              prev.map((s) =>
+            updateStationCache(room.id, (prev) => ({
+              activeShift: null,
+              dutyHistory: prev.dutyHistory.map((s) =>
                 s.id === previousShift.id
                   ? {
                       ...s,
@@ -396,29 +442,31 @@ export const DutyStationScreen: React.FC<Props> = ({
                       status: "COMPLETED",
                     }
                   : s
-              )
-            );
+              ),
+            }));
 
             // 2. Background Sync (asynchronous, non-blocking)
             try {
               const res = await endDutyShift(room.id);
               if (res.duration_seconds) {
-                setDutyHistory((prev) =>
-                  prev.map((s) =>
+                updateStationCache(room.id, (prev) => ({
+                  dutyHistory: prev.dutyHistory.map((s) =>
                     s.id === previousShift.id
                       ? { ...s, duration_seconds: res.duration_seconds }
                       : s
-                  )
-                );
+                  ),
+                }));
               }
               // Background silent sync without wiping state
-              loadStationData(false, true);
+              silentSyncLatest();
             } catch (err: any) {
               // Rollback on failure
-              setActiveShift(previousShift);
-              setDutyHistory((prev) =>
-                prev.map((s) => (s.id === previousShift.id ? previousShift : s))
-              );
+              updateStationCache(room.id, (prev) => ({
+                activeShift: previousShift,
+                dutyHistory: prev.dutyHistory.map((s) =>
+                  s.id === previousShift.id ? previousShift : s
+                ),
+              }));
               Alert.alert("Lỗi", err.message || "Không thể kết thúc ca trực");
             }
           },
@@ -434,49 +482,56 @@ export const DutyStationScreen: React.FC<Props> = ({
     const staySecs = Math.max(0, Math.round((nowMs - inMs) / 1000));
     const tempPresenceId = -nowMs;
 
-    // 1. Write-Ahead: Instantly remove from occupants (0ms latency)
-    setOccupants((prev) => prev.filter((o) => o.student_id !== studentId));
-
-    // 2. Write-Ahead: Instantly append checkout item to presenceHistory
-    if (leavingOccupant) {
-      const completedItem: PresenceHistoryItem = {
-        id: tempPresenceId,
-        organization_id: organization.id,
-        room_id: room.id,
-        student_id: leavingOccupant.student_id,
-        student_name: leavingOccupant.student_name,
-        check_in_at: leavingOccupant.check_in_at,
-        check_out_at: new Date(nowMs).toISOString(),
-        duration_seconds: staySecs,
-        scan_method: "BARCODE",
-        is_on_duty: false,
-        scanner_id: String(user.id),
-        scanner_name: displayName,
-        is_valid_member: leavingOccupant.is_valid_member ?? true,
-        is_system_user: leavingOccupant.is_system_user,
-        created_at: new Date(nowMs).toISOString(),
+    // 1. Write-Ahead: Instantly remove from occupants and append to history (0ms latency)
+    updateStationCache(room.id, (prev) => {
+      const newOccupants = prev.occupants.filter((o) => o.student_id !== studentId);
+      let newPresence = prev.presenceHistory;
+      if (leavingOccupant) {
+        const completedItem: PresenceHistoryItem = {
+          id: tempPresenceId,
+          organization_id: organization.id,
+          room_id: room.id,
+          student_id: leavingOccupant.student_id,
+          student_name: leavingOccupant.student_name,
+          check_in_at: leavingOccupant.check_in_at,
+          check_out_at: new Date(nowMs).toISOString(),
+          duration_seconds: staySecs,
+          scan_method: "BARCODE",
+          is_on_duty: false,
+          scanner_id: String(user.id),
+          scanner_name: displayName,
+          is_valid_member: leavingOccupant.is_valid_member ?? true,
+          is_system_user: leavingOccupant.is_system_user,
+          created_at: new Date(nowMs).toISOString(),
+        };
+        newPresence = [completedItem, ...newPresence];
+      }
+      return {
+        occupants: newOccupants,
+        presenceHistory: newPresence,
       };
-      setPresenceHistory((prev) => [completedItem, ...prev]);
-    }
+    });
 
-    // 3. Background Sync (asynchronous, non-blocking)
+    // 2. Background Sync (asynchronous, non-blocking)
     try {
       const result = await performCheckOut(room.id, studentId);
       if (result.duration_seconds) {
-        setPresenceHistory((prev) =>
-          prev.map((p) =>
+        updateStationCache(room.id, (prev) => ({
+          presenceHistory: prev.presenceHistory.map((p) =>
             p.id === tempPresenceId
               ? { ...p, duration_seconds: result.duration_seconds }
               : p
-          )
-        );
+          ),
+        }));
       }
-      loadStationData(false, true);
+      silentSyncLatest();
     } catch (err: any) {
       // Rollback on failure
       if (leavingOccupant) {
-        setOccupants((prev) => [leavingOccupant, ...prev]);
-        setPresenceHistory((prev) => prev.filter((p) => p.id !== tempPresenceId));
+        updateStationCache(room.id, (prev) => ({
+          occupants: [leavingOccupant, ...prev.occupants],
+          presenceHistory: prev.presenceHistory.filter((p) => p.id !== tempPresenceId),
+        }));
       }
       Alert.alert("Lỗi", err.message || "Không thể check-out sinh viên");
     }
@@ -746,14 +801,14 @@ export const DutyStationScreen: React.FC<Props> = ({
           </View>
 
           {/* ── 5. Connected Timeline Stream (Creative human design) ───────── */}
-          {loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color="#2563EB" />
-              <Text style={styles.loadingText}>Đang đồng bộ dòng sự kiện...</Text>
-            </View>
-          ) : activeTab === "TIMELINE" ? (
+          {activeTab === "TIMELINE" ? (
             <View style={styles.timelineContainer}>
-              {unifiedTimeline.length === 0 ? (
+              {unifiedTimeline.length === 0 && loading ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="small" color="#2563EB" />
+                  <Text style={styles.loadingText}>Đang tải dữ liệu ca trực...</Text>
+                </View>
+              ) : unifiedTimeline.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateTitle}>Chưa có hoạt động</Text>
                   <Text style={styles.emptyStateText}>

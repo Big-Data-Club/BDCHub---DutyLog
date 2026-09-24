@@ -20,6 +20,10 @@ import {
   resolveDisplayName,
   fetchStudentProfile,
 } from "../api/client";
+import {
+  recordCheckInOptimistic,
+  recordCheckOutOptimistic,
+} from "../api/stationStore";
 import { UserDetailModal } from "../components/UserDetailModal";
 
 interface Props {
@@ -144,6 +148,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
           isValidMember: result.is_valid_member,
           isSystemUser: result.is_system_user,
         });
+        recordCheckInOptimistic(room.id, result, "Trực ban");
         setManualInput("");
         onSuccess();
       } else {
@@ -188,6 +193,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
           isValidMember: result.is_valid_member,
           isSystemUser: result.is_system_user,
         });
+        recordCheckInOptimistic(room.id, result, "Trực ban");
       } else {
         const result: CheckOutResult = await performCheckOut(room.id, rawId);
         setLastResult({
@@ -197,6 +203,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
             (result.duration_seconds || 1800) / 60
           )} phút)`,
         });
+        recordCheckOutOptimistic(room.id, result, "Trực ban");
       }
       setManualInput("");
       onSuccess();
