@@ -3,7 +3,7 @@ import {
   ActivityIndicator, Platform, SafeAreaView, ScrollView, StyleSheet,
   Text, TouchableOpacity, View, type StyleProp, type ViewStyle,
 } from 'react-native';
-import { CalendarDays, ClipboardList, ScanLine, UserRound, Home, ChevronLeft, Inbox } from 'lucide-react-native';
+import { CalendarDays, ClipboardList, ScanLine, UserRound, House, ChevronLeft, Inbox } from 'lucide-react-native';
 import { palette, spacing } from './theme';
 
 export function Page({ children, scroll = true, footer, style }: {
@@ -54,7 +54,7 @@ export function Spinner({ text = 'Đang tải dữ liệu…' }: { text?: string
 }
 export type TabId = 'HOME' | 'SHIFTS' | 'SCAN' | 'ACTIVITY' | 'PROFILE';
 const tabItems = [
-  { id: 'HOME', title: 'Trang chủ', Icon: Home },
+  { id: 'HOME', title: 'Trang chủ', Icon: House },
   { id: 'SHIFTS', title: 'Ca trực', Icon: CalendarDays },
   { id: 'SCAN', title: 'Quét', Icon: ScanLine },
   { id: 'ACTIVITY', title: 'Hoạt động', Icon: ClipboardList },

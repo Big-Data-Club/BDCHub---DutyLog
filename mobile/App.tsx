@@ -11,6 +11,7 @@ import { QRDisplayScreen } from './src/screens/QRDisplayScreen';
 import { AdminInspectionScreen } from './src/screens/AdminInspectionScreen';
 import { HomeScreen } from './src/screens/v2/HomeScreen';
 import { RegistrationScreen } from './src/screens/v2/RegistrationScreen';
+import { RegistrationSuccessScreen } from './src/screens/v2/RegistrationSuccessScreen';
 import { RoomPickerScreen } from './src/screens/v2/RoomPickerScreen';
 import { ShiftsScreen } from './src/screens/v2/ShiftsScreen';
 import { ActivityScreen } from './src/screens/v2/ActivityScreen';
@@ -18,7 +19,7 @@ import { ProfileScreen } from './src/screens/v2/ProfileScreen';
 import { Page, Tabs, type TabId } from './src/ui/Kit';
 import { palette } from './src/ui/theme';
 
-type Route = 'LOGIN' | 'APP' | 'ORG_SELECT' | 'REGISTER' | 'PICKER' | 'SCAN' | 'QR_DISPLAY' | 'LEGACY_STATION' | 'ADMIN_INSPECTION';
+type Route = 'LOGIN' | 'APP' | 'ORG_SELECT' | 'REGISTER' | 'REGISTER_SUCCESS' | 'PICKER' | 'SCAN' | 'QR_DISPLAY' | 'LEGACY_STATION' | 'ADMIN_INSPECTION';
 export default function App() {
   const [route, setRoute] = useState<Route>('LOGIN');
   const [tab, setTab] = useState<TabId>('HOME');
@@ -29,6 +30,7 @@ export default function App() {
   const [room, setRoom] = useState<Room | null>(null);
   const [restoring, setRestoring] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [receipt, setReceipt] = useState<{ roomName: string; date: string; time: string; id: number } | null>(null);
   const [scanMode, setScanMode] = useState<'BARCODE' | 'QR_SCAN'>('BARCODE');
 
   const chooseOrg = useCallback(async (target: Organization) => {
@@ -121,7 +123,8 @@ export default function App() {
         onOrg={() => setRoute('ORG_SELECT')} onLogout={logout} onLegacy={() => room ? setRoute('LEGACY_STATION') : setRoute('PICKER')}
         onAdmin={() => setRoute('ADMIN_INSPECTION')}/>}
     </Page>}
-    {route === 'REGISTER' && org && <Page scroll={false}><RegistrationScreen organizations={orgs} selectedOrg={org} rooms={rooms} onBack={() => setRoute('APP')}/></Page>}
+    {route === 'REGISTER' && org && <Page scroll={false}><RegistrationScreen organizations={orgs} selectedOrg={org} rooms={rooms} onBack={() => setRoute('APP')} onSuccess={saved => { setReceipt(saved); setRoute('REGISTER_SUCCESS'); }}/></Page>}
+    {route === 'REGISTER_SUCCESS' && receipt && <Page scroll={false}><RegistrationSuccessScreen roomName={receipt.roomName} date={receipt.date} time={receipt.time} onHome={() => { setTab('SHIFTS'); setRoute('APP'); }} onAgain={() => setRoute('REGISTER')}/></Page>}
     {route === 'PICKER' && <Page scroll={false}><RoomPickerScreen rooms={rooms} selectedRoom={room} onBack={() => setRoute('APP')}
       onSelect={selected => { setRoom(selected); setRoute('APP'); }}/></Page>}
     {route === 'SCAN' && room && <ScanCheckinScreen room={room} initialMode={scanMode}

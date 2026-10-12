@@ -10,9 +10,11 @@ export const ActivityScreen: React.FC<{ user: User; rooms: Room[] }> = ({ user, 
   const [kind, setKind] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
   const [events, setEvents] = useState<PresenceHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const load = useCallback(async () => {
     const settled = await Promise.allSettled(rooms.map(r => fetchPresenceHistory(r.id, 30, 0)));
+    setLoadError(settled.some(s => s.status === 'rejected') ? 'Không thể tải toàn bộ lịch sử từ máy chủ. Vui lòng thử lại.' : '');
     const records = settled.flatMap(s => s.status === 'fulfilled' ? s.value : []);
     const unique = new Map(records.map(e => [`${e.room_id}:${e.id}`, e]));
     setEvents(Array.from(unique.values()).sort((a, b) => new Date(b.check_out_at || b.check_in_at).getTime() - new Date(a.check_out_at || a.check_in_at).getTime()));
@@ -31,6 +33,7 @@ export const ActivityScreen: React.FC<{ user: User; rooms: Room[] }> = ({ user, 
     <View style={styles.segment}><Filter selected={mine} onPress={() => setMine(true)} title="Tôi quét"/><Filter selected={!mine} onPress={() => setMine(false)} title="Cả phòng"/></View>
     <View style={styles.filters}><Filter selected={kind === 'ALL'} onPress={() => setKind('ALL')} title="Tất cả"/><Filter selected={kind === 'IN'} onPress={() => setKind('IN')} title="Vào"/><Filter selected={kind === 'OUT'} onPress={() => setKind('OUT')} title="Ra"/></View>
     <Text style={[textStyles.muted, { marginBottom: 12 }]}>“Tôi quét” lọc theo người thực hiện thao tác; không phải tất cả lần bạn được điểm danh.</Text>
+    {!!loadError && <View style={{ backgroundColor: palette.orangeWash, padding: 12, borderRadius: 10, marginBottom: 12 }}><Text style={{ color: palette.orange, fontSize: 12 }}>{loadError}</Text></View>}
     {loading ? <Spinner/> : <Card style={{ paddingVertical: 8 }}>
       {groups.length ? groups.map(([day, rows]) => <View key={day}><Text style={styles.day}>{day}</Text>
         {rows.map((e, i) => { const left = !!e.check_out_at;

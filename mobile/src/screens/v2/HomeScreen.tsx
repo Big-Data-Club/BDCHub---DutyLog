@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CalendarPlus, CheckCircle2, DoorOpen, History, QrCode, Radio, ScanLine, Square, UserRound, Users } from 'lucide-react-native';
 import type { DutyShiftRecord, Organization, PresenceHistoryItem, Room, User } from '../../types';
 import { fetchCurrentShift, fetchOccupancy, fetchPresenceHistory, endDutyShift, resolveDisplayName } from '../../api/client';
@@ -16,15 +16,19 @@ export const HomeScreen: React.FC<Props> = ({ user, organization, rooms, selecte
   const [occupancy, setOccupancy] = useState(0);
   const [activity, setActivity] = useState<PresenceHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [shiftUnknown, setShiftUnknown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   const load = useCallback(async () => {
-    if (!selectedRoom) { setShift(null); setActivity([]); setOccupancy(0); return; }
+    if (!selectedRoom) { setShift(null); setActivity([]); setOccupancy(0); setLoadError(''); return; }
     const id = selectedRoom.id;
     const [s, occupants, events] = await Promise.allSettled([
       fetchCurrentShift(id), fetchOccupancy(id), fetchPresenceHistory(id, 6, 0),
     ]);
+    setLoadError([s, occupants, events].some(x => x.status === 'rejected') ? 'Một phần dữ liệu chưa tải được từ máy chủ. Kéo xuống để thử lại.' : '');
+    setShiftUnknown(s.status !== 'fulfilled');
     if (s.status === 'fulfilled') {
       const active = s.value.has_active_shift ? s.value.shift : undefined;
       setShift(active && String(active.duty_staff_id) === String(user.id) ? active : null);
@@ -34,13 +38,17 @@ export const HomeScreen: React.FC<Props> = ({ user, organization, rooms, selecte
   }, [selectedRoom?.id, user.id]);
   useEffect(() => { setLoading(true); load().finally(() => setLoading(false)); }, [load]);
   const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
-  const stop = () => Alert.alert('Kết thúc ca trực?', 'Hệ thống sẽ ghi nhận thời gian kết thúc ca tại phòng này.', [
+  const stopConfirmed = async () => {
+    try { await endDutyShift(selectedRoom!.id); await load(); }
+    catch (e: any) { if (Platform.OS === 'web') window.alert(e?.message || 'Không thể kết thúc ca.'); else Alert.alert('Không thể kết thúc ca', e?.message || 'Vui lòng thử lại.'); }
+  };
+  const stop = () => {
+    if (Platform.OS === 'web') { if (window.confirm('Kết thúc ca trực hiện tại?')) void stopConfirmed(); return; }
+    Alert.alert('Kết thúc ca trực?', 'Hệ thống sẽ ghi nhận thời gian kết thúc ca tại phòng này.', [
     { text: 'Hủy', style: 'cancel' },
-    { text: 'Kết thúc ca', style: 'destructive', onPress: async () => {
-      try { await endDutyShift(selectedRoom!.id); await load(); }
-      catch (e: any) { Alert.alert('Không thể kết thúc ca', e?.message || 'Vui lòng thử lại.'); }
-    } },
+    { text: 'Kết thúc ca', style: 'destructive', onPress: () => void stopConfirmed() },
   ]);
+  };
   const firstName = resolveDisplayName(user.name, user.email).split(' ').slice(-1).join(' ');
   return <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh}/> }>
     <View style={styles.topbar}><View style={styles.helloLeft}>
@@ -49,6 +57,7 @@ export const HomeScreen: React.FC<Props> = ({ user, organization, rooms, selecte
     </View><TouchableOpacity onPress={onProfile} style={styles.avatar}><UserRound size={21} color={palette.blue} /><View style={styles.onlineDot}/></TouchableOpacity></View>
     {selectedRoom && <TouchableOpacity onPress={onSelectRoom} style={styles.roomSelector}><Text style={styles.roomSelectorText} numberOfLines={1}>📍 {organization.name} · {roomShort(selectedRoom)}</Text><Text style={styles.roomChange}>Đổi phòng ›</Text></TouchableOpacity>}
     {loading && !activity.length ? <Spinner/> : null}
+    {!!loadError && <View style={{ backgroundColor: palette.orangeWash, borderRadius: 12, padding: 12, marginBottom: 12 }}><Text style={{ color: palette.orange, fontSize: 12 }}>{loadError}</Text></View>}
     <Card style={[styles.hero, shift ? styles.heroActive : undefined]}>
       {shift ? <><View style={styles.statusRow}><View style={styles.greenDot}/><Text style={styles.activeLabel}>ĐANG TRỰC</Text><Radio size={14} color={palette.green}/></View>
         <Text style={styles.timer}>{elapsed(shift.start_time, now)}</Text>
@@ -56,8 +65,8 @@ export const HomeScreen: React.FC<Props> = ({ user, organization, rooms, selecte
         <ActionButton title="Quét điểm danh" onPress={onScan} icon={<ScanLine color={palette.white} size={18}/>}/>
         <View style={{ height: 10 }}/><ActionButton title="Kết thúc ca" outline danger onPress={stop} icon={<Square size={14} color={palette.red} fill={palette.red}/>}/>
       </> : <><View style={styles.statusRow}><Text style={styles.noShift}>◌  CHƯA CÓ CA</Text></View>
-        <Text style={styles.heroTitle}>Bạn chưa có ca trực đang hoạt động</Text>
-        <Text style={textStyles.muted}>Đăng ký lịch trực hoặc chọn phòng để xem hoạt động.</Text>
+        <Text style={styles.heroTitle}>{shiftUnknown ? 'Chưa xác định được trạng thái ca trực' : 'Bạn chưa có ca trực đang hoạt động'}</Text>
+        <Text style={textStyles.muted}>{shiftUnknown ? 'Không thể kiểm tra với máy chủ. Hãy thử làm mới dữ liệu.' : 'Đăng ký lịch trực hoặc chọn phòng để xem hoạt động.'}</Text>
         <View style={{ height: 17 }}/><ActionButton title="Đăng ký ca trực" onPress={onRegister} icon={<CalendarPlus color={palette.white} size={17}/>}/>
       </>}
     </Card>
