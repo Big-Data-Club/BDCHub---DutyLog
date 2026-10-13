@@ -1,0 +1,34 @@
+Page slug,Page title,Language,Characters,Words,File
+API-Contract,05 · REST API Contract and Backward Compatibility,English,5305,687,wiki/API-Contract.md
+Architecture-Decision-Records,30 · Architecture Decision Records and Design Trade-offs,English,4590,592,wiki/Architecture-Decision-Records.md
+Authentication-and-Authorization,"06 · Authentication, Authorization, and Tenant Isolation",English,4702,646,wiki/Authentication-and-Authorization.md
+CI-CD-and-Release,"21 · CI/CD, Release Gates, and Supply-Chain Safety",English,4028,512,wiki/CI-CD-and-Release.md
+Contributing,26 · Contributing to DutyLog: Workflow and Review Checklist,English,2252,298,wiki/Contributing.md
+Data-Model-and-Migrations,"08 · PostgreSQL Data Model, Migrations, and Consistency",English,4076,534,wiki/Data-Model-and-Migrations.md
+Deployment-CoreApplication,22 · Deploying DutyLog through CoreApplication,English,3076,381,wiki/Deployment-CoreApplication.md
+Documentation-Governance,27 · Documentation Governance and Review Cadence,English,2722,381,wiki/Documentation-Governance.md
+Expo-Web-and-iPhone,16 · Expo Web on Ubuntu and iPhone XS Max,English,3650,487,wiki/Expo-Web-and-iPhone.md
+Getting-Started,01 · Getting Started with DutyLog,English,3264,471,wiki/Getting-Started.md
+Glossary,29 · Glossary of DutyLog Engineering Terms,English,2782,440,wiki/Glossary.md
+Home,DutyLog — Engineering Handbook,English,4245,499,wiki/Home.md
+Incident-Runbooks,24 · Incident Response Runbooks,English,3361,457,wiki/Incident-Runbooks.md
+Kafka-and-Outbox,"13 · Kafka, Transactional Outbox, and Consumer Reliability",English,4771,601,wiki/Kafka-and-Outbox.md
+Mobile-and-Web-Development,"15 · Mobile Architecture, Navigation, and State Management",English,4187,522,wiki/Mobile-and-Web-Development.md
+Observability-and-SLO,"20 · Observability, Distributed Tracing, and Service-Level Objectives",English,3119,383,wiki/Observability-and-SLO.md
+Offline-Synchronization,12 · Offline Scanning and Reconciliation,English,3370,410,wiki/Offline-Synchronization.md
+Organization-Synchronization,07 · Synchronizing Organizations from the Auth Service,English,3751,493,wiki/Organization-Synchronization.md
+Performance-Engineering,19 · Performance Engineering and Load Testing,English,4317,633,wiki/Performance-Engineering.md
+Presence-and-QR-Flow,"11 · QR, Barcode, and the Presence State Machine",English,3948,511,wiki/Presence-and-QR-Flow.md
+Product-Scope-and-Roles,"02 · Product Scope, Actors, and Responsibilities",English,3554,497,wiki/Product-Scope-and-Roles.md
+Realtime-and-Occupancy,14 · Realtime Occupancy and Derived Projections,English,2763,375,wiki/Realtime-and-Occupancy.md
+Repository-and-Code-Map,03 · Repository Layout and Ownership Boundaries,English,3274,401,wiki/Repository-and-Code-Map.md
+Roadmap-and-Backend-Gaps,"25 · Backend Gap Register, Priorities, and Evidence",English,3957,563,wiki/Roadmap-and-Backend-Gaps.md
+Security-and-Privacy,23 · Security and Personal Data Protection,English,3431,406,wiki/Security-and-Privacy.md
+Shift-Registration,09 · Duty Shift Registration and Capacity Management,English,4079,482,wiki/Shift-Registration.md
+System-Architecture,04 · System Architecture and Data Flow,English,3901,491,wiki/System-Architecture.md
+Testing-Strategy,18 · Testing Strategy and Quality Gates,English,3364,471,wiki/Testing-Strategy.md
+Transaction-and-Idempotency,10 · Transaction Correctness and Idempotency,English,3314,456,wiki/Transaction-and-Idempotency.md
+Troubleshooting,28 · Troubleshooting Matrix,English,2761,412,wiki/Troubleshooting.md
+UI-UX-Guidelines,17 · UX Research and Interface Guidelines,English,3785,550,wiki/UI-UX-Guidelines.md
+_Footer,---,English,214,13,wiki/_Footer.md
+_Sidebar,DutyLog Engineering Wiki,English,1811,195,wiki/_Sidebar.md
