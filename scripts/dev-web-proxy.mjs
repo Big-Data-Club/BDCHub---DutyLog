@@ -26,7 +26,12 @@ function proxy(req, res) {
   delete headers.origin;
   delete headers.referer;
   const forward = agent.request(dest, { method: req.method, headers, timeout: 20000 }, response => {
-    res.writeHead(response.statusCode || 502, response.headers);
+    const responseHeaders = { ...response.headers };
+    if (!prefix) {
+      responseHeaders['cross-origin-opener-policy'] = 'same-origin-allow-popups';
+      responseHeaders['referrer-policy'] = 'no-referrer-when-downgrade';
+    }
+    res.writeHead(response.statusCode || 502, responseHeaders);
     response.pipe(res);
   });
   forward.on('timeout', () => forward.destroy(new Error('Upstream timeout')));
@@ -45,4 +50,4 @@ server.on('upgrade', (req, socket, head) => {
   target.on('error', () => socket.destroy());
   socket.on('error', () => target.destroy());
 });
-server.listen(port, bind, () => console.log(`DutyLog Expo Web: http://${bind}:${port} (Metro :${metroPort}; API via staging)`));
+server.listen(port, bind, () => console.log(`DutyLog Expo Web: http://localhost:${port} (Metro :${metroPort}; API via configured upstream)`));

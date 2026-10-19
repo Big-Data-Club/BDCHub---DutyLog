@@ -5,7 +5,7 @@
 - This is a **merge overlay**, not an edited GitHub branch. The published repository was inspected through its accessible raw source (main.go, db.go, middleware/auth.go, mobile client.ts) as of 2026-10-12; remote checkout/install/database access was unavailable in the creation environment.
 - Additive endpoints live in `backend/internal/registration`. Existing `/api/v1` handlers, payloads and response schemas are unchanged.
 - New UI is based on the DutyLog UI v2 overlay and uses live server-side booking availability; NO mock slot capacity or success response.
-- Replaces unsafe mobile API network fallbacks with real errors for login, shift, check-in/out, QR, occupancy and history. **Offline scan is intentionally NOT implemented here.** Disconnected scans must not be counted as successful until ACK.
+- Authentication fails closed on network errors. Other legacy API methods still contain sample-data fallbacks and need separate hardening. **Offline scan reconciliation is not implemented.**
 - Builds, real JWT integration tests, schema migration in a staging PostgreSQL database, and scanner stress tests are still required. Do not merge/deploy to prod on syntax checks alone.
 
 ## Apply safely
@@ -66,24 +66,73 @@ The date above is illustrative; choose a future slot matching the configured ISO
 - `organization_members` protects cross-tenant booking, `rooms.organization_id` guards room–org mismatches. Admin slot creation requires a valid admin/manager JWT AND a manager role in that organization; SUPER_ADMIN may manage any organization. Test this permission boundary against Auth claim conventions.
 - No linkage to actual shift start/end, no attendance grading/no-show workflow, no transaction outbox, no consumer Kafka delivery, no offline sync. These remain open tasks.
 
-## Expo Web (same-origin dev proxy)
+## Expo Web with remote APIs
 
-**Direct cross-origin browser requests may fail CORS** even if native Expo calls work. The included development proxy keeps browser, Metro and remote staging APIs on one origin. It requires no new npm dependency.
+Owner: BDC Dev Team. Runtime source: `scripts/run-expo-web.mjs`,
+`scripts/dev-web-proxy.mjs`, and `mobile/src/api/client.ts`.
+
+Only Expo and its small development proxy run locally. Auth, DutyLog backend,
+PostgreSQL, Redis and Kafka stay on the configured server. No local Next.js
+frontend is required. Use Node.js 22+.
+
+From this repository's root:
 
 ```bash
-cd /path/to/BDCHub---DutyLog/mobile
+cd mobile
 npm install
-npx expo install react-dom react-native-web @expo/metro-runtime
-
-# In a SEPARATE terminal, launch both Metro and the local proxy:
-export DUTYLOG_UPSTREAM='https://<approved-staging-host>/dutylogapiv1'
-export DUTYLOG_AUTH_UPSTREAM='https://<approved-staging-host>/apiv1'
-/path/to/dutylog-v2/scripts/run-expo-web.sh "$PWD"
+# First setup only; preserve an existing .env:
+cp -n .env.example.dutylog-v2 .env
+npm run web:remote
 ```
 
-Open `http://localhost:8090` (not port 8081). The launcher sets `EXPO_PUBLIC_API_URL=http://localhost:8090/dutylogapiv1` and auth path automatically. The proxy is for **local development only**, defaults to binding to `127.0.0.1`, and is NOT a production proxy. For physical iPhone Safari use LAN binding only on a trusted network with additional access restrictions. Do not put refresh tokens in public env vars.
+In `mobile/.env`, set `EXPO_PUBLIC_API_URL` to the remote DutyLog API base
+(`https://<server>/dutylogapiv1`) and `EXPO_PUBLIC_AUTH_URL` to the remote Auth
+base (`https://<server>/apiv1`). Set `EXPO_PUBLIC_GOOGLE_CLIENT_ID` to the same
+**Web client ID** accepted by the remote Auth service (`GOOGLE_CLIENT_ID`, also
+used by the frontend as `NEXT_PUBLIC_GOOGLE_CLIENT_ID`). This is a public ID;
+never put a client secret, password or refresh token in Expo public variables.
 
-Expo Web browser session stores refresh token in **memory only** (reload logs out) rather than localStorage. Native builds continue to use expo-secure-store. OAuth remains unavailable until Auth Service contract is confirmed.
+Open **http://localhost:8090**, not Metro's port 8081. The launcher reads
+`.env.local` then `.env` (existing shell variables take priority), overrides only
+the browser API URLs to use the same-origin proxy, and starts both processes.
+Ctrl+C stops both. `DUTYLOG_UPSTREAM` and `DUTYLOG_AUTH_UPSTREAM` can override
+remote destinations; `DUTYLOG_DEV_PORT` / `EXPO_WEB_PORT` override the ports.
+The proxy binds to loopback by default and is for local development only.
+
+### Google login
+
+In Google Cloud, open the existing Web OAuth client and add these **Authorized
+JavaScript origins**:
+
+- `http://localhost`
+- `http://localhost:8090` (use your configured proxy port if different)
+
+The button uses Google Identity Services with a JavaScript callback, then posts
+`{idToken}` to remote `/apiv1/api/auth/google/login`. Auth verifies the token and
+returns the BDC access/refresh tokens. This flow does not need a localhost
+redirect URI, a local Auth service, or a NextAuth session from the main frontend.
+See [Google's setup guide](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid).
+
+Accounts that are missing, pending approval or blocked receive an error;
+new users must register on BDC Hub first. Web tokens stay in memory and reloading
+requires login again. Native credentials still use SecureStore; the Google
+button integration is **web only**, native Google sign-in is not implemented.
+
+Troubleshooting:
+
+- Google origin error: confirm the exact browser origin is allowlisted for the
+  same client ID used by Auth; restart Expo after changing public env variables.
+- 502: remote service is unreachable or the API base path is wrong.
+- Google login 401: check the frontend client ID matches Auth's configured audience.
+- Booking endpoints 404: remote backend may not have the v2 registration routes;
+  starting local UI does not deploy them.
+- Login errors never create demo sessions. Other legacy client APIs still contain
+  sample-data fallbacks; displayed rooms/history alone do not prove server health.
+- The configured server receives real writes when you check in or register a
+  shift. Use staging for trial actions.
+
+Checks: `npm run test:auth`, `npx tsc --noEmit`, and manual Google login with an
+approved account. Local automated tests do not verify Google Cloud origin settings.
 
 ## Staging checks (must pass before claiming complete)
 

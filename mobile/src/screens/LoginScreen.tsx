@@ -4,10 +4,11 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Eye, EyeOff, LockKeyhole, UserRound } from 'lucide-react-native';
-import { clearSession, loginWithCredentials } from '../api/client';
+import { loginWithCredentials, loginWithGoogle } from '../api/client';
 import type { User } from '../types';
 import { palette } from '../ui/theme';
 import { ActionButton } from '../ui/Kit';
+import GoogleSignIn from '../components/GoogleSignIn';
 
 interface Props { onLoginSuccess: (user: User) => void }
 export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
@@ -21,11 +22,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     setBusy(true); setError('');
     try {
       const signedIn = await loginWithCredentials(account.trim(), password);
-      // Legacy client creates a demo token on network errors. Fail closed in the new UI.
-      if (signedIn.token.startsWith('demo-')) {
-        await clearSession();
-        throw new Error('Không kết nối được máy chủ xác thực. Vui lòng thử lại sau.');
-      }
       onLoginSuccess(signedIn);
     }
     catch (e: any) { setError(e?.message || 'Đăng nhập thất bại. Vui lòng thử lại.'); }
@@ -59,9 +55,12 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         <ActionButton title={busy ? 'Đang đăng nhập…' : 'Đăng nhập'} disabled={busy} onPress={submit}/>
         {busy ? <ActivityIndicator color={palette.blue} style={{ marginTop: 8 }} /> : null}
         <View style={styles.divider}><View style={styles.line}/><Text style={styles.dividerText}>hoặc</Text><View style={styles.line}/></View>
-        <TouchableOpacity style={styles.google} onPress={() => Alert.alert('Google Sign-in', 'Đăng nhập Google chưa được kết nối với BDC Hub Auth. Hãy dùng tài khoản và mật khẩu.') }>
-          <Text style={styles.googleIcon}>G</Text><Text style={styles.googleText}>Đăng nhập với Google</Text>
-        </TouchableOpacity>
+        <GoogleSignIn disabled={busy} onError={setError} onCredential={async credential => {
+          setBusy(true); setError('');
+          try { onLoginSuccess(await loginWithGoogle(credential)); }
+          catch (e: any) { setError(e?.message || 'Đăng nhập Google thất bại.'); }
+          finally { setBusy(false); }
+        }} />
         <Text style={styles.signup}>Chưa có tài khoản? Đăng ký tại{' '}
           <Text style={styles.link} onPress={() => Linking.openURL('https://bdc.hpcc.vn')}>bdc.hpcc.vn</Text></Text>
       </View>

@@ -56,6 +56,24 @@ dutylog/
 
 ## 4. Quick Start
 
+### View DutyLog locally using server APIs (recommended)
+
+Run only the DutyLog web UI and development proxy locally; use the existing
+server for Auth, DutyLog backend and its infrastructure. No local main frontend
+or Docker Compose stack is needed.
+
+```bash
+cd mobile
+npm install
+cp -n .env.example.dutylog-v2 .env  # first setup only
+# Configure remote API URLs and EXPO_PUBLIC_GOOGLE_CLIENT_ID in .env.
+npm run web:remote
+```
+
+Open **http://localhost:8090**. Requires Node.js 22+.
+For Google Cloud origins, session behavior and troubleshooting, see
+[remote web setup](docs/README.md#expo-web-with-remote-apis).
+
 ### Backend Service (Go)
 
 ```bash

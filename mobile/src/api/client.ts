@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 import {
   Room,
   Occupant,
@@ -18,6 +19,21 @@ const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || "http://localhost:8080";
 // Security Keys for Hardware-backed Keystore (Android) / Keychain (iOS)
 const SECURE_REFRESH_TOKEN_KEY = "bdchub_dutylog_refresh_token";
 const SECURE_USER_META_KEY = "bdchub_dutylog_user_meta";
+
+// Browsers keep session material in memory; native uses the OS secure store.
+const webSession = new Map<string, string>();
+const sessionStore = {
+  getItemAsync: (key: string) => Platform.OS === "web"
+    ? Promise.resolve(webSession.get(key) ?? null) : SecureStore.getItemAsync(key),
+  setItemAsync: (key: string, value: string) => {
+    if (Platform.OS === "web") { webSession.set(key, value); return Promise.resolve(); }
+    return SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED });
+  },
+  deleteItemAsync: (key: string) => {
+    if (Platform.OS === "web") { webSession.delete(key); return Promise.resolve(); }
+    return SecureStore.deleteItemAsync(key);
+  },
+};
 
 // ── Name Normalization (Ensures human-readable name, never raw email/username) ─
 export function resolveDisplayName(rawName?: string, email?: string): string {
@@ -101,15 +117,15 @@ export async function saveSession(user: User, refreshToken?: string): Promise<vo
   inMemoryAccessToken = user.token;
   currentUser = user;
 
-  // 2. Store Refresh Token in hardware-backed SecureStore (iOS Keychain / Android Keystore)
-  if (refreshToken) {
-    try {
-      await SecureStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, refreshToken, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED,
-      });
-    } catch (err) {
-      console.warn("Failed to store refresh token in SecureStore:", err);
+  // 2. Persist on native; retain only in memory on web.
+  try {
+    if (refreshToken) {
+      await sessionStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, refreshToken);
+    } else {
+      await sessionStore.deleteItemAsync(SECURE_REFRESH_TOKEN_KEY);
     }
+  } catch (err) {
+    console.warn("Failed to update session storage:", err);
   }
 
   // 3. Store non-sensitive user metadata for instant recovery on app startup
@@ -121,9 +137,7 @@ export async function saveSession(user: User, refreshToken?: string): Promise<vo
       roles: user.roles,
       is_super_admin: user.is_super_admin,
     };
-    await SecureStore.setItemAsync(SECURE_USER_META_KEY, JSON.stringify(meta), {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED,
-    });
+    await sessionStore.setItemAsync(SECURE_USER_META_KEY, JSON.stringify(meta));
   } catch (err) {
     console.warn("Failed to store user metadata in SecureStore:", err);
   }
@@ -131,11 +145,12 @@ export async function saveSession(user: User, refreshToken?: string): Promise<vo
 
 export async function refreshAccessToken(): Promise<boolean> {
   try {
-    const storedRt = await SecureStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
+    const storedRt = await sessionStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
     if (!storedRt) return false;
 
     const res = await fetch(`${AUTH_URL}/api/auth/refresh`, {
       method: "POST",
+      credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken: storedRt }),
     });
@@ -143,6 +158,7 @@ export async function refreshAccessToken(): Promise<boolean> {
     if (res.ok) {
       const data = await res.json();
       const newAt = data.token;
+      if (typeof newAt !== "string" || !newAt) return false;
       const newRt = data.refreshToken || storedRt;
 
       // Update in-memory access token
@@ -150,9 +166,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 
       // Rotate refresh token in Keychain/Keystore if new one is provided
       if (newRt && newRt !== storedRt) {
-        await SecureStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, newRt, {
-          keychainAccessible: SecureStore.WHEN_UNLOCKED,
-        });
+        await sessionStore.setItemAsync(SECURE_REFRESH_TOKEN_KEY, newRt);
       }
 
       if (currentUser) {
@@ -172,7 +186,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 
 export async function restoreSession(): Promise<User | null> {
   try {
-    const storedRt = await SecureStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
+    const storedRt = await sessionStore.getItemAsync(SECURE_REFRESH_TOKEN_KEY);
     if (!storedRt) {
       return null;
     }
@@ -183,36 +197,23 @@ export async function restoreSession(): Promise<User | null> {
       // Restore user object from cached metadata
       let userMeta: any = null;
       try {
-        const metaStr = await SecureStore.getItemAsync(SECURE_USER_META_KEY);
+        const metaStr = await sessionStore.getItemAsync(SECURE_USER_META_KEY);
         if (metaStr) userMeta = JSON.parse(metaStr);
       } catch {}
 
+      if (!Number.isSafeInteger(userMeta?.id) || userMeta.id <= 0 || !userMeta.email) {
+        await clearSession();
+        return null;
+      }
       const user: User = {
-        id: userMeta?.id || 1,
-        email: userMeta?.email || "user@bdc.edu.vn",
+        id: userMeta.id,
+        email: userMeta.email,
         name: resolveDisplayName(userMeta?.name, userMeta?.email),
         roles: userMeta?.roles || ["ROLE_USER"],
         is_super_admin: Boolean(userMeta?.is_super_admin),
         token: inMemoryAccessToken,
       };
 
-      currentUser = user;
-      return user;
-    }
-
-    // Fallback: If offline and refresh token is present with local mock/dev
-    const metaStr = await SecureStore.getItemAsync(SECURE_USER_META_KEY);
-    if (metaStr) {
-      const userMeta = JSON.parse(metaStr);
-      inMemoryAccessToken = "restored-offline-token-" + Date.now();
-      const user: User = {
-        id: userMeta.id,
-        email: userMeta.email,
-        name: resolveDisplayName(userMeta.name, userMeta.email),
-        roles: userMeta.roles,
-        is_super_admin: Boolean(userMeta.is_super_admin),
-        token: inMemoryAccessToken,
-      };
       currentUser = user;
       return user;
     }
@@ -229,6 +230,7 @@ export async function clearSession(): Promise<void> {
   if (inMemoryAccessToken) {
     fetch(`${AUTH_URL}/api/auth/logout`, {
       method: "POST",
+      credentials: "omit",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${inMemoryAccessToken}`,
@@ -242,10 +244,10 @@ export async function clearSession(): Promise<void> {
 
   // Clear hardware-backed Keystore / Keychain
   try {
-    await SecureStore.deleteItemAsync(SECURE_REFRESH_TOKEN_KEY);
+    await sessionStore.deleteItemAsync(SECURE_REFRESH_TOKEN_KEY);
   } catch {}
   try {
-    await SecureStore.deleteItemAsync(SECURE_USER_META_KEY);
+    await sessionStore.deleteItemAsync(SECURE_USER_META_KEY);
   } catch {}
 }
 
@@ -275,79 +277,49 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
 
 // ── Authentication ──────────────────────────────────────────────────────────
 
-export async function loginWithCredentials(
-  email: string,
-  pass: string
-): Promise<User> {
+async function loginRequest(path: string, body: Record<string, string>): Promise<User> {
+  let res: Response;
   try {
-    const res = await fetch(`${AUTH_URL}/api/auth/login`, {
+    res = await fetch(`${AUTH_URL}/api/auth/${path}`, {
       method: "POST",
+      credentials: "omit",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: pass }),
+      body: JSON.stringify(body),
     });
-
-    if (res.ok) {
-      const data = await res.json();
-      const roleStr = data.role ? String(data.role) : "";
-      const roles: string[] = Array.isArray(data.roles)
-        ? data.roles
-        : roleStr
-        ? [roleStr]
-        : [];
-      const isAdmin =
-        roles.some(
-          (r) =>
-            r.toUpperCase().includes("ADMIN") ||
-            r.toUpperCase().includes("MANAGER")
-        ) || roleStr.toUpperCase().includes("ADMIN");
-
-      const user: User = {
-        id: data.userId || data.user_id || data.id || 1,
-        email: data.email || email,
-        name: resolveDisplayName(data.name || data.full_name, email),
-        roles,
-        is_super_admin: isAdmin,
-        token: data.token || data.access_token || "jwt-token-" + Date.now(),
-      };
-
-      // Persist session: in-memory access token + Keychain/Keystore refresh token
-      await saveSession(user, data.refreshToken);
-      return user;
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || "Tài khoản hoặc mật khẩu không chính xác");
-    }
-  } catch (e: any) {
-    if (e.message?.includes("không chính xác")) {
-      throw e;
-    }
-    console.warn("Auth service unavailable, falling back to local credentials mode:", e);
-    const isAdmin = email.toLowerCase().includes("admin");
-    const user: User = {
-      id: isAdmin ? 99 : 101,
-      email,
-      name: resolveDisplayName(undefined, email),
-      roles: isAdmin ? ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"] : ["ROLE_USER"],
-      is_super_admin: isAdmin,
-      token: "demo-jwt-token-" + Date.now(),
-    };
-    await saveSession(user, "demo-refresh-token-" + Date.now());
-    return user;
+  } catch {
+    throw new Error("Không kết nối được máy chủ xác thực. Vui lòng thử lại.");
   }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (path === "google/login" && res.status === 404 && data.email) {
+      throw new Error("Tài khoản Google chưa có trên BDC Hub. Hãy đăng ký tại BDC Hub trước.");
+    }
+    throw new Error(data.message || `Đăng nhập thất bại (HTTP ${res.status}).`);
+  }
+  const id = Number(data.userId ?? data.user_id ?? data.id);
+  const token = data.token || data.access_token;
+  if (!Number.isSafeInteger(id) || id <= 0 || typeof token !== "string" || !token || !data.email) {
+    throw new Error("Máy chủ trả về phiên đăng nhập không hợp lệ.");
+  }
+  const roles: string[] = Array.isArray(data.roles)
+    ? data.roles.filter((role: unknown): role is string => typeof role === "string")
+    : typeof data.role === "string" ? [data.role] : [];
+  const user: User = {
+    id, email: data.email, name: resolveDisplayName(data.name || data.full_name, data.email), roles,
+    is_super_admin: roles.some(role => ["SUPER_ADMIN", "ROLE_SUPER_ADMIN"].includes(role.toUpperCase())),
+    token,
+  };
+  await saveSession(user, data.refreshToken);
+  return user;
 }
 
-export async function loginWithGoogle(mockEmail?: string): Promise<User> {
-  const targetEmail = mockEmail || "student.google@bdc.edu.vn";
-  const user: User = {
-    id: 202,
-    email: targetEmail,
-    name: "Google Student User",
-    roles: ["ROLE_USER"],
-    is_super_admin: false,
-    token: "demo-google-oauth-token-" + Date.now(),
-  };
-  await saveSession(user, "demo-google-refresh-token-" + Date.now());
-  return user;
+export function loginWithCredentials(email: string, password: string): Promise<User> {
+  return loginRequest("login", { email, password });
+}
+
+export function loginWithGoogle(idToken: string): Promise<User> {
+  if (!idToken.trim()) return Promise.reject(new Error("Không nhận được ID token từ Google."));
+  return loginRequest("google/login", { idToken });
 }
 
 // ── Organizations Flow ──────────────────────────────────────────────────────

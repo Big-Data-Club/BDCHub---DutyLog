@@ -5,7 +5,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:remote": "node ../scripts/run-expo-web.mjs",
+    "test:auth": "node --test ../scripts/auth-client.test.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",
