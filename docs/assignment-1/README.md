@@ -1,7 +1,7 @@
 # DutyLog — Chuẩn bị nộp Assignment 1
 
 Đã tìm thấy báo cáo 39 trang tại **`report/main.pdf`**, cùng bộ nguồn LaTeX trong `report/`. Giữ nguyên vị trí và tên file này.
-Đặt minh chứng nghiên cứu đã ẩn thông tin cá nhân trong thư mục [`evidence/`](evidence/).
+Research Evidence hiện liên kết đến Google Sheet do nhóm cung cấp trong [`evidence/README.md`](evidence/README.md). Có thể bổ sung bản xuất đã ẩn thông tin cá nhân vào thư mục đó sau.
 
 Đây là hướng dẫn chuẩn bị. Chỉ có các file trong máy chưa tạo thành bài nộp công khai.
 
@@ -56,7 +56,8 @@ Xem diff trước khi commit: các file trùng tên trong Wiki sẽ nhận nội
 - [x] Đã chuyển 13 phần LaTeX thành 12 trang Wiki Markdown, gồm hai luồng Mermaid, và liên kết từ trang `Assignment-1`.
 - [x] `main.pdf` đã truy cập công khai; bản đã đăng khớp file local tại lần kiểm tra đầu tiên ngày 20/10/2026.
 - [ ] Đã đăng các trang Product Discovery lên GitHub Wiki và kiểm tra bảng, sơ đồ, nội dung trên trang công khai.
-- [ ] Đã bổ sung dữ liệu khảo sát, bảng câu hỏi và minh chứng thật trong `evidence/`, cập nhật mục lục minh chứng.
+- [x] Đã liên kết Google Sheet khảo sát do nhóm cung cấp từ Home, Assignment 1 và mục lục minh chứng.
+- [ ] Đã kiểm tra giảng viên xem được Sheet khi không đăng nhập; bổ sung bản xuất ẩn danh khi nhóm chuẩn bị xong.
 - [ ] Mọi thành viên đã tham gia GitHub Organization; bổ sung danh sách nhóm và tài khoản GitHub từ thông tin thật.
 - [x] Đã xác minh [DutyLog Project Board](https://github.com/orgs/Big-Data-Club/projects/3) trả về HTTP 200 khi không đăng nhập. Đã sửa URL cũ trả về 404 trong nguồn LaTeX, link PDF và các trang Wiki; cần push bản sửa nếu chưa đăng.
 - [ ] Board có công việc thật, trạng thái và người phụ trách phù hợp.

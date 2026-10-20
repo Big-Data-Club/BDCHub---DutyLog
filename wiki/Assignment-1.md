@@ -6,7 +6,7 @@
 
 **Group:** L02_MƯỜI GIỜ KÉM BẢY
 
-> **Trạng thái chuẩn bị:** Báo cáo PDF 39 trang, Wiki và Project Board đã truy cập được công khai khi kiểm tra ngày 20/10/2026. Cần bổ sung minh chứng khảo sát gốc đã ẩn thông tin cá nhân và xác nhận tài khoản GitHub của các thành viên trước khi hoàn tất kiểm tra bài nộp.
+> **Trạng thái chuẩn bị:** Báo cáo PDF 39 trang, Wiki và Project Board đã truy cập được công khai khi kiểm tra ngày 20/10/2026. Research Evidence hiện dùng Google Sheet do nhóm cung cấp; cần xác nhận quyền xem của Sheet, Figma và tư cách thành viên GitHub Organization trước khi hoàn tất kiểm tra bài nộp.
 
 ## Submission Materials
 
@@ -18,7 +18,7 @@
 | GitHub Repository | [BDCHub---DutyLog](https://github.com/Big-Data-Club/BDCHub---DutyLog) |
 | Figma Prototype | [DutyLog trên Figma Make](https://www.figma.com/make/edHYn86d06Uh95uwZJ1Wqm/DutyLog?fullscreen=1&t=mm4kpDhtha3xpPrq-1&code-node-id=0-6) — cần kiểm tra quyền xem khi không đăng nhập |
 | GitHub Project Board | [DutyLog Project Board — Public](https://github.com/orgs/Big-Data-Club/projects/3) |
-| Research Evidence | [Mục lục minh chứng](https://github.com/Big-Data-Club/BDCHub---DutyLog/tree/main/docs/assignment-1/evidence) — chờ bổ sung minh chứng thật |
+| Research Evidence | [Google Sheet khảo sát](https://docs.google.com/spreadsheets/d/1R5b7StzAAhT9WhOII3t3W2ZHKKUwrysQPayB1g6tjMU/edit?usp=sharing) · [Mục lục minh chứng](https://github.com/Big-Data-Club/BDCHub---DutyLog/tree/main/docs/assignment-1/evidence) |
 
 ## Product Discovery Documentation
 

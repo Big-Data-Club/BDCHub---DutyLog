@@ -10,9 +10,10 @@
 - [GitHub Organization](https://github.com/Big-Data-Club)
 - [GitHub Repository](https://github.com/Big-Data-Club/BDCHub---DutyLog)
 - [GitHub Project Board — DutyLog](https://github.com/orgs/Big-Data-Club/projects/3)
+- [Research Evidence — Google Sheet khảo sát](https://docs.google.com/spreadsheets/d/1R5b7StzAAhT9WhOII3t3W2ZHKKUwrysQPayB1g6tjMU/edit?usp=sharing)
 - [Figma Prototype — DutyLog](https://www.figma.com/make/edHYn86d06Uh95uwZJ1Wqm/DutyLog?fullscreen=1&t=mm4kpDhtha3xpPrq-1&code-node-id=0-6)
 
-**Preparation status:** The report, Wiki and project board were publicly accessible when checked on October 20, 2026. Original research evidence and team GitHub membership still need completion; see Assignment 1 for details.
+**Preparation status:** The report, Wiki and project board were publicly accessible when checked on October 20, 2026. Research evidence is linked through the team's Google Sheet. Sheet/Figma viewing permissions and team GitHub membership still need confirmation; see Assignment 1 for details.
 
 ## Engineering Handbook
 

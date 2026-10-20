@@ -11,7 +11,7 @@
 | GitHub Project | [Mở GitHub Project](https://github.com/orgs/Big-Data-Club/projects/3) |
 | GitHub Wiki | [Mở GitHub Wiki](https://github.com/Big-Data-Club/BDCHub---DutyLog/wiki) |
 | Kế hoạch kỹ thuật | Tệp *DutyLog 2.0 Product Engineering Roadmap* |
-| Biểu mẫu/bộ câu hỏi khảo sát gốc<br>(dữ liệu thô, cần ẩn email trước khi công bố) | [Minh chứng khảo sát — cần bản ẩn danh công khai](https://github.com/Big-Data-Club/BDCHub---DutyLog/tree/main/docs/assignment-1/evidence) |
+| Biểu mẫu/bộ câu hỏi khảo sát gốc<br>(dữ liệu thô, cần ẩn email trước khi công bố) | [Google Sheet khảo sát do nhóm cung cấp](https://docs.google.com/spreadsheets/d/1R5b7StzAAhT9WhOII3t3W2ZHKKUwrysQPayB1g6tjMU/edit?usp=sharing) |
 
 GitHub Project dùng luồng *Backlog → To Do → In Progress → Review → Done*. Task được lấy từ roadmap kỹ thuật; chỉ các task phục vụ F1--F7 nằm ở To Do hoặc In Progress, các task còn lại giữ ở Backlog (mục 12.2).
 
