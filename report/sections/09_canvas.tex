@@ -1,0 +1,51 @@
+%% FILE 09 | CHỦ SỞ HỮU: Người 4 | HẠN: 13/10
+%% EXPECTED (2.8): đủ 9 ô, nhất quán với bằng chứng sau Evidence Evaluation.
+%%   Chuỗi: Problem→Customer/User→Channels ; Solution→Advantage→Costs ; Value→Metrics→Revenue.
+%%   Ô chưa chắc phải ghi rõ là "assumption", không viết như sự thật. Label tiền tố p4:
+\section{Mô hình DutyLog (Business Canvas)}
+
+Bảng dưới đây tóm tắt vấn đề, cách giải quyết dự kiến, người dùng và các số liệu cần theo dõi. Những lợi ích chưa được kiểm chứng được ghi rõ là giả thuyết. Số liệu khảo sát là tự báo cáo từ mẫu thuận tiện (n=35), không đại diện cho toàn bộ thành viên CLB.
+
+\setlength{\tabcolsep}{4pt}
+\begingroup
+\small
+\renewcommand{\arraystretch}{1.05}
+\captionsetup{hypcap=false}
+\captionof{table}{Tóm tắt mô hình DutyLog theo Business Canvas}\label{tab:business_canvas}\par
+\begin{tabular}{|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|}
+\hline
+\textbf{Vấn đề} & \textbf{Giải pháp} & \textbf{Giá trị dự kiến} \\
+\hline
+21/35 người xem Google Sheet, Form hoặc lịch trực; 12/35 từng gặp lịch đổi mà mọi người không biết; 8/35 không biết ai đang giữ hoặc trực phòng (A1). Ban quản lý có thể mất công tổng hợp thủ công (giả định A7). 13/35 dễ quên, 7/35 vội và 6/35 thấy nhiều bước khiến họ dễ bỏ qua việc ghi nhận ra vào (A6). &
+Người trực dùng điện thoại quét thẻ sinh viên hoặc QR của thành viên; nhập MSSV nếu không quét được. Ứng dụng hiển thị phòng mở/đóng, người trực và người có mặt; tự kết thúc ca khi hết giờ. &
+Giúp biết phòng mở hay đóng và hiện có ai (giả thuyết A1); giảm số thao tác so với ghi bảng hoặc nhắn nhóm (giả thuyết A2, A6); giúp ban quản lý theo dõi giờ trực dễ hơn (giả thuyết A7, chưa khảo sát trực tiếp). \\
+\hline
+\end{tabular}
+\par\medskip
+\begin{tabular}{|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|}
+\hline
+\textbf{Người dùng / khách hàng} & \textbf{Điểm khác biệt dự kiến} & \textbf{Số liệu cần theo dõi} \\
+\hline
+Người dùng dự kiến là thành viên CLB, nhất là người trực phòng. Ban quản lý là khách hàng dự kiến (giả thuyết A7, chưa khảo sát trực tiếp). &
+Giả thuyết: gộp trạng thái phòng ngay lúc này, xác nhận tại chỗ bởi người trực bằng điện thoại (không cần máy chấm công) và lịch/thay đổi lịch trong một ứng dụng. Nhóm chat kết hợp Sheet vẫn là đối thủ mạnh nhất; các lợi thế này cần được so sánh trong pilot. Thiết kế riêng cho hoạt động của CLB sinh viên là giả định. &
+Theo dõi độ chính xác danh sách người có mặt (đối chiếu thủ công), tỷ lệ ca có ghi nhận, thời gian ghi nhận một lượt, số lần mở màn hình trạng thái phòng, số lần nhập MSSV và số ca tự kết thúc. Mốc tham khảo, không phải tiêu chí đạt: 24/35 người nói sẽ check-in/check-out mỗi lần nếu thao tác nhanh. Ngưỡng dự kiến (đề xuất, chưa có baseline): độ chính xác danh sách ít nhất 90\%, ít nhất 80\% ca có ghi nhận, thời gian quét trung bình không quá 4 giây/lượt, nhập MSSV dự phòng dưới 15\% và ít nhất 2 lượt xem trạng thái/thành viên/tuần. \\
+\hline
+\end{tabular}
+\par\medskip
+\begin{tabular}{|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|>{\raggedright\arraybackslash}p{0.30\textwidth}|}
+\hline
+\textbf{Kênh tiếp cận} & \textbf{Chi phí} & \textbf{Doanh thu} \\
+\hline
+Nhóm chat hoặc trang của CLB, buổi sinh hoạt, hướng dẫn đầu năm và đợt thử nghiệm tại một CLB. &
+Chi phí máy chủ, cơ sở dữ liệu và thời gian phát triển, bảo trì của nhóm; ưu tiên gói miễn phí nếu phù hợp; nhóm chưa ước tính chi phí bằng tiền. &
+Đây là dự án học tập, hiện chưa có doanh thu. Giảm công theo dõi của ban quản lý là lợi ích dự kiến (A7), cần đo trong pilot. \\
+\hline
+\end{tabular}
+\par
+\endgroup
+\setlength{\tabcolsep}{6pt}
+
+\subsection{Giải thích quan hệ giữa các ô và nguồn bằng chứng}
+Bảng liên kết ba nhóm nội dung. \textbf{Vấn đề -- Người dùng -- Kênh tiếp cận:} nhu cầu biết ai đang ở phòng cần kiểm chứng (A1); thành viên là người dùng dự kiến, còn ban quản lý là nhóm người dùng giả thuyết (A7). Nhóm dự kiến tiếp cận thành viên qua nhóm chat, buổi sinh hoạt và đợt thử nghiệm tại một CLB. \textbf{Giải pháp -- Điểm khác biệt -- Chi phí:} nhóm dự kiến thử cách người trực dùng điện thoại quét thẻ hoặc QR; cần so sánh chi phí và khả năng hạn chế khai báo từ xa với Google Forms. \textbf{Giá trị -- Số liệu theo dõi -- Doanh thu:} thông tin hiện diện nhanh, thao tác ít và giảm công quản lý là các lợi ích dự kiến; số liệu thử nghiệm sẽ giúp kiểm tra chúng. Dự án học tập hiện chưa có doanh thu.
+
+Khảo sát hiện có không xác nhận trực tiếp giả định A1, A3 và A7; các giả định A2, A4, A5 và A6 cần điều chỉnh. Vì vậy, giá trị dự kiến, nhóm khách hàng, điểm khác biệt và lợi ích quản lý đều cần được xác nhận qua phỏng vấn ban quản lý (A7) và pilot.

@@ -1,0 +1,38 @@
+%% FILE 08 | CHỦ SỞ HỮU: Người 2 | HẠN: 13/10 (viết cùng Người 3)
+%% Nối tiếp section 7 (không có \section ở đây).
+%% EXPECTED (2.7): mỗi giả định quan trọng có quyết định: Keep / Revise / Reject / Investigate further;
+%%   kèm: tìm thấy gì, limitation, quyết định, và DỰ ÁN THAY ĐỔI GÌ. Kết quả chưa kết luận là chấp nhận được;
+%%   không diễn giải bằng chứng yếu cho khớp ý tưởng ban đầu. Label tiền tố p2:
+\subsection{Quyết định sản phẩm}
+\small
+\setlength{\tabcolsep}{4pt}
+\setlength{\extrarowheight}{1pt}
+{\centering
+\begin{tabularx}{0.94\textwidth}{|>{\raggedright\arraybackslash}p{0.13\textwidth}|>{\raggedright\arraybackslash}p{0.20\textwidth}|>{\raggedright\arraybackslash}p{0.29\textwidth}|X|}
+\hline
+\textbf{Giả định} & \textbf{Quyết định} & \textbf{Lý do và giới hạn} & \textbf{Thay đổi trong dự án} \\ \hline
+A1 & Cần kiểm chứng thêm (Investigate further) & Khảo sát tự báo cáo, mẫu thuận tiện (n=35), có 21/35 người tra cứu bằng Sheet/Form/lịch trực (14/21 trong nhóm từng lên phòng); 12/35 từng gặp lịch đổi mà mọi người không biết (7/21) và 8/35 không biết ai đang giữ hoặc trực phòng (5/21). Tuy nhiên 16/35 chưa gặp vấn đề đáng kể (10/21); 14/35 chưa từng lên phòng, nên chưa thể suy ra mức độ phổ biến hoặc tần suất nhu cầu. & Thử nghiệm nguyên mẫu tra cứu trạng thái phòng với thành viên thường sử dụng và người chưa từng sử dụng phòng. Chưa cam kết tính năng hiện diện thời gian thực là giá trị cốt lõi trước khi kiểm chứng nhu cầu và mức độ tin cậy vào dữ liệu. Hai nhóm khó khăn (lịch/ai trực 15/35; hiện diện 13/35) xuất hiện cùng nhau, nhưng nhu cầu biết ai đang có mặt thấp hơn nhu cầu biết phòng mở/đóng ở nhóm có lên phòng gần đây (7/18 so với 9/18); vì vậy thử nghiệm A1 phải tách hai loại thông tin này. Cổng quyết định G1 (mục 12): nếu A1 bị thách thức (người dùng chỉ cần phòng mở/đóng và ai đang trực), MVP thu hẹp về F1, F2 và F7 rút gọn, bỏ luồng quét F3--F6. \\ \hline
+A2 & Cần điều chỉnh (Revise) & Khảo sát tự báo cáo, mẫu thuận tiện (n=35), có 24/35 người nói sẽ check-in/out mỗi lần nếu thao tác nhanh (17/21 trong nhóm từng lên phòng); một số người chỉ muốn ghi nhận khi có ca (5/35) hoặc khi thấy lợi ích rõ (3/35). Đây là ý định có điều kiện (``nếu nhanh''), dễ nhận được câu trả lời đồng ý; chưa quan sát hành vi sử dụng lặp lại. Con số này khá cao nhưng không được coi là bằng chứng hành vi. & Thiết kế luồng ghi nhận ít bước, lợi ích hiển thị rõ, và kết quả mỗi lượt quét có xác nhận cùng thao tác hoàn tác. Chuyển từ ``thành viên tự check-in'' sang ``người trực quét'' là quyết định thiết kế để tránh yêu cầu hành vi của mọi thành viên, không phải kết luận từ khảo sát. Kiểm chứng bằng pilot trước khi yêu cầu check-in/check-out cho mọi lượt ra vào. \\ \hline
+\end{tabularx}\par}
+\clearpage
+\small
+{\centering
+\begin{tabularx}{0.94\textwidth}{|>{\raggedright\arraybackslash}p{0.13\textwidth}|>{\raggedright\arraybackslash}p{0.20\textwidth}|>{\raggedright\arraybackslash}p{0.29\textwidth}|X|}
+\hline
+\textbf{Giả định} & \textbf{Quyết định} & \textbf{Lý do và giới hạn} & \textbf{Thay đổi trong dự án} \\ \hline
+A3 & Cần kiểm chứng thêm (Investigate further) & Trong khảo sát tự báo cáo, mẫu thuận tiện (n=35), máy đặt tại phòng quét thẻ SV được chọn nhiều nhất (13/35; 9/21 trong nhóm từng lên phòng); 10/35 chọn mở app cá nhân quét QR của phòng (5/21 trong nhóm từng lên phòng). Khảo sát không hỏi trực tiếp mô hình người đang trực dùng điện thoại quét thẻ/QR của thành viên và chưa đo khả năng sử dụng thực tế. & Giữ mô hình người trực dùng điện thoại quét thẻ / QR thành viên như một phương án thử nghiệm, chưa coi là đã được khảo sát ủng hộ; so sánh với thiết bị dùng chung tại cửa trong pilot trước khi khóa lựa chọn công nghệ. Cách so sánh: một số ca chạy chế độ người trực quét, một số ca chạy cùng màn quét trên tablet/điện thoại dùng chung đặt tại cửa để thành viên tự đưa thẻ hoặc QR cá nhân (F5), đo cùng các chỉ số ở mục 4.5. Cần xác nhận cách xác thực phiên thiết bị dùng chung trước khi chạy. \\ \hline
+A4 & Cần điều chỉnh (Revise) & Khảo sát tự báo cáo, lấy mẫu thuận tiện (n=35): 21/35 có thể tham gia trực nếu lịch phù hợp, 10/35 chưa chắc, 3/35 không có nhu cầu và 1/35 trả lời có. Đây là ý định, không chứng minh đăng ký hoặc hoàn thành ca. & Hỗ trợ xem lịch ca ở MVP qua F2/F7; hoãn khai báo khung giờ đến khi có số liệu đăng ký và hoàn thành ca thực tế. \\ \hline
+\end{tabularx}\par}
+\clearpage
+\footnotesize
+{\centering
+\begin{tabularx}{0.94\textwidth}{|>{\raggedright\arraybackslash}p{0.13\textwidth}|>{\raggedright\arraybackslash}p{0.20\textwidth}|>{\raggedright\arraybackslash}p{0.29\textwidth}|X|}
+\hline
+\textbf{Giả định} & \textbf{Quyết định} & \textbf{Lý do và giới hạn} & \textbf{Thay đổi trong dự án} \\ \hline
+A5 & Cần điều chỉnh (Revise) & Trong khảo sát tự báo cáo, lấy mẫu thuận tiện (n=35), khi chọn vài việc nên làm tốt nhất, 21/35 chọn biết phòng mở/đóng, 16/35 biết phòng có ai và 16/35 đăng ký/đổi ca. Có quan tâm đến đăng ký/đổi ca; ý định tự báo cáo chưa chứng minh hành vi, và quy trình cần được xác nhận với ban quản lý (A7). & Đưa xem lịch ca, người trực, ca kế tiếp và thay đổi lịch vào F2/F7 của MVP; hoãn đăng ký/đổi ca đến khi kiểm chứng hành vi và phỏng vấn ban quản lý. Việc hoãn không phải do thiếu quan tâm. Giới hạn đã biết: do MVP chưa có thông báo đẩy, người dùng chỉ thấy lịch thay đổi khi tự mở ứng dụng, nên nhu cầu ``biết kịp thời'' (N7) chỉ được đáp ứng một phần và được đánh giá lại ở pilot. \\ \hline
+A6 & Cần điều chỉnh (Revise) & Khảo sát tự báo cáo, mẫu thuận tiện (n=35): 13/35 nêu dễ quên, 8/35 mạng trường không ổn định, 7/35 vội và 6/35 quá nhiều bước; đồng thời 16/35 cho biết thao tác bình thường, không phiền. Bằng chứng cho thấy trải nghiệm khác nhau và chưa chứng minh các rào cản là đáng kể với mọi người hoặc nhắc nhở/offline có hiệu quả. & MVP giữ thiết kế ít thao tác, tự kết thúc ca (F6) và báo lỗi/thử lại khi mất mạng; chưa đưa nhắc nhở hoặc offline vào MVP. Đánh giá lại sau pilot đầu. \\ \hline
+A7 & Cần kiểm chứng thêm (Investigate further) & Khảo sát không hỏi trực tiếp ban quản lý về quy trình, thời gian tổng hợp hoặc nhu cầu báo cáo; do đó chưa có bằng chứng để xác nhận lợi ích quản trị. & Phỏng vấn và quan sát ban quản lý về quy trình hiện tại, ghi nhận công việc và dữ liệu cần thiết trước khi quyết định xây dashboard hoặc báo cáo. \\ \hline
+\end{tabularx}\par}
+\normalsize
+\setlength{\tabcolsep}{6pt}
+\setlength{\extrarowheight}{0pt}

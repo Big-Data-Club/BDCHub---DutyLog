@@ -1,0 +1,37 @@
+%% FILE 05 | CHỦ SỞ HỮU: Người 3 | HẠN: nháp 11/10, final 12/10
+%% EXPECTED (2.5): ai tham gia / nguồn nào; cách chọn; phương pháp; khi nào, thế nào;
+%%   findings chính; findings MÂU THUẪN; limitation và bias; hệ quả với dự án.
+%%   Phân biệt: người dùng nói đã làm / nói sẽ làm / nhóm quan sát trực tiếp / họ thực sự làm khi dùng sản phẩm.
+%%   Raw evidence (ảnh, ghi chú) bỏ trong evidence/ và trích dẫn ở đây. Label tiền tố p3:
+\section{Nghiên cứu người dùng và thị trường}
+
+\subsection{Người tham gia và cách chọn}
+Khảo sát tự báo cáo có 38 dòng trả lời. Sau khi loại phản hồi trùng email và giữ bản gửi muộn nhất, còn 35 người. Trong số này, 21 người từng lên phòng sinh hoạt, 14 người chưa từng lên phòng và 17 người không lên phòng lần nào trong tháng gần đây.
+
+Mẫu được lấy theo cách thuận tiện và không đại diện cho toàn bộ thành viên CLB. Kênh phát khảo sát và cách chọn người trả lời: đăng đường dẫn khảo sát trên nhóm chat nội bộ CLB và fanpage/group sinh viên theo phương pháp lấy mẫu thuận tiện (do mở rộng kênh phát nên mẫu thu về gồm cả 21 người đã từng lên phòng và 14 người chưa từng lên phòng).
+
+\subsection{Phương pháp, thời gian, cách tiến hành}
+Khảo sát thu thập từ ngày 03/10 đến ngày 12/10/2026. Câu trả lời thể hiện trải nghiệm hoặc ý định do người tham gia tự báo cáo, không phải hành vi được quan sát trực tiếp. Một số câu cho phép chọn nhiều đáp án nên tổng số lượt chọn có thể lớn hơn 35.
+
+\subsection{Kết quả chính}
+\begin{itemize}[nosep]
+    \item \textbf{Cách tra cứu:} 21/35 người xem Google Sheet, Form hoặc lịch trực; 6/35 không kiểm tra trước; 3/35 ghé phòng; 3/35 cho biết chưa có cách nào tiện.
+    \item \textbf{Vấn đề từng gặp:} 16/35 chưa gặp vấn đề đáng kể; 12/35 từng gặp trường hợp lịch thay đổi mà mọi người không biết; 8/35 không biết ai đang giữ hoặc trực phòng.
+    \item \textbf{Ghi nhận ra vào:} 24/35 cho biết sẽ check-in/check-out mỗi lần nếu thao tác nhanh. Về cách ghi nhận, 13/35 chọn máy đặt tại phòng quét thẻ sinh viên; 10/35 chọn mở ứng dụng cá nhân để quét QR của phòng.
+    \item \textbf{Việc muốn ứng dụng làm tốt:} 21/35 chọn xem phòng đang mở hay đóng; 16/35 chọn xem hiện tại phòng có ai; 16/35 chọn đăng ký hoặc đổi ca trực.
+\end{itemize}
+
+\subsection{Kết quả mâu thuẫn}
+Sở thích về cách ghi nhận không đồng nhất: 13/35 chọn máy đặt tại phòng quét thẻ sinh viên, 10/35 chọn mở ứng dụng cá nhân quét QR của phòng, 5/35 chọn mở ứng dụng và bấm một nút, và khoảng 5/35 chọn cách tự động hơn. Mô hình dự kiến của MVP—người trực dùng điện thoại quét thẻ hoặc QR của thành viên—không được hỏi trực tiếp. Vì vậy, nhóm cần thử nghiệm và so sánh mô hình này với phương án thiết bị đặt tại phòng.
+
+Có 16/35 người chọn đăng ký hoặc đổi ca là việc ứng dụng nên làm tốt. Tuy nhiên, đây là câu trả lời tự báo cáo, chưa chứng minh hành vi thực tế. Quy trình này cũng cần được xác nhận với ban quản lý (A7), nhóm chưa được khảo sát trực tiếp.
+
+\subsection{Hạn chế và thiên lệch}
+\begin{itemize}[nosep]
+    \item Mẫu thuận tiện không đại diện cho toàn bộ thành viên CLB; 14/35 người chưa từng lên phòng nên chưa phải người dùng mục tiêu trực tiếp.
+    \item 17/35 người không lên phòng lần nào trong tháng gần đây, và chỉ 4/35 cho biết lên phòng 3--5 lần mỗi tháng. Vì vậy, người sử dụng phòng thường xuyên còn ít trong mẫu; kết quả có thể chưa phản ánh rõ trải nghiệm của nhóm người dùng mục tiêu.
+    \item Kết quả là tự báo cáo, chưa quan sát hành vi sử dụng ứng dụng; khảo sát cũng chưa hỏi trực tiếp nhu cầu của ban quản lý (A7).
+\end{itemize}
+
+\subsection{Hệ quả với dự án}
+Các kết quả giúp nhóm xác định nội dung cần kiểm chứng và thiết kế phạm vi MVP; chúng không chứng minh rằng người dùng chắc chắn sẽ sử dụng ứng dụng. Nhóm giữ chức năng tra cứu trạng thái phòng, ghi nhận ra vào và tự kết thúc ca trong MVP. Đăng ký/đổi ca, thông báo nhắc nhở và chế độ không cần mạng được để ngoài MVP để kiểm chứng sau. Chi tiết quyết định và lý do được trình bày tại mục 7 và mục 9.

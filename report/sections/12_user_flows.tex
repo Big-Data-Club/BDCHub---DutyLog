@@ -1,0 +1,121 @@
+%% FILE 12 | CHỦ SỞ HỮU: Người 5 | Label tiền tố p5:
+%% [ĐÃ SỬA] Flow 1: bước ghi nhận hiển thị kết quả + hoàn tác (giảm lỗi đảo trạng thái); thêm ghi chú đảo trạng thái; Flow 2: ghi chú về 'liên hệ người trực'.
+\tikzset{
+ p5st/.style={ellipse,draw,fill=green!15,font=\scriptsize,inner sep=2pt,minimum height=6mm,align=center},
+ p5act/.style={rectangle,rounded corners=2pt,draw,fill=blue!8,text width=4.2cm,align=center,font=\scriptsize,inner sep=3pt,minimum height=6mm},
+ p5dc/.style={diamond,draw,fill=yellow!20,aspect=3,text width=2.1cm,align=center,font=\scriptsize,inner sep=0pt},
+ p5bad/.style={rectangle,rounded corners=2pt,draw,fill=red!10,text width=2.9cm,align=center,font=\scriptsize,inner sep=3pt,minimum height=6mm},
+ p5ok/.style={rectangle,rounded corners=2pt,draw,fill=green!10,text width=2.9cm,align=center,font=\scriptsize,inner sep=3pt,minimum height=6mm},
+ p5lbl/.style={font=\tiny,inner sep=1.5pt,fill=white}
+}
+\section{Các luồng sử dụng chính}
+
+\subsection{Luồng 1: Người trực bắt đầu ca và ghi nhận thành viên}
+\textbf{Điểm bắt đầu:} người trực mở ứng dụng. \\
+\textbf{Kết quả mong đợi:} thành viên được ghi nhận vào / ra, trạng thái phòng đúng, ca kết thúc đúng giờ.\\
+\textbf{Chức năng:} F1, F2, F3, F4, F5, F6, F7.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>=Stealth,y=0.8cm]
+ % ---- cột chính (x = 0) ----
+ \node[p5st] (s)  at (0,0)     {Bắt đầu: mở ứng dụng};
+ \node[p5act](a1) at (0,-1.1)  {Đăng nhập};
+ \node[p5act](a2) at (0,-2.2)  {Chọn phòng và ca trực};
+ \node[p5dc] (d1) at (0,-3.9)  {Đúng ca trực của mình?};
+ \node[p5act](a3) at (0,-5.7)  {Bắt đầu ca (phòng ``Đang trực'')};
+ \node[p5act](a4) at (0,-6.8)  {Người trực quét thẻ SV / QR thành viên};
+ \node[p5dc] (d2) at (0,-8.6)  {Quét được?};
+ \node[p5dc] (d3) at (0,-10.5) {Mã thành viên hợp lệ?};
+ \node[p5dc] (d4) at (0,-12.4) {Đang có mặt?};
+ \node[p5act,text width=2.4cm](cin)  at (-3.4,-14.2) {Check-in};
+ \node[p5act,text width=2.4cm](cout) at (3.4,-14.2)  {Check-out};
+ \node[p5act](a6) at (0,-15.6) {Gửi ghi nhận; hiện kết quả ``đã vào/ra'' + Hoàn tác; cập nhật trạng thái phòng};
+ \node[p5dc] (d5) at (0,-17.4) {Hết ca hoặc đóng ca?};
+ \node[p5ok,text width=4.2cm](end) at (0,-19.2) {Ca đóng, thành viên còn lại tự check-out};
+ % ---- cột trái: nhánh lỗi ----
+ \node[p5bad](e1) at (-5.2,-3.9)  {Báo lỗi, chọn ca khác};
+ \node[p5bad](e2) at (-5.2,-10.5) {Báo không tìm thấy, quét lại};
+ % ---- cột phải: nhánh thay thế ----
+ \node[p5act,text width=3cm](a5) at (5.2,-8.6) {Nhập MSSV thủ công};
+ \node[p5bad,text width=3.2cm](e3) at (5.2,-15.6) {Mất mạng: báo lỗi; không lưu offline};
+
+ % ---- luồng chính ----
+ \draw[->](s)--(a1);
+ \draw[->](a1)--(a2);
+ \draw[->](a2)--(d1);
+ \draw[->](d1)--node[p5lbl,right,pos=0.45]{Có}(a3);
+ \draw[->](a3)--(a4);
+ \draw[->](a4)--(d2);
+ \draw[->](d2)--node[p5lbl,right,pos=0.45]{Có}(d3);
+ \draw[->](d3)--node[p5lbl,right,pos=0.45]{Có}(d4);
+ \draw[->](d4.west) -| node[p5lbl,pos=0.2,above]{Chưa}(cin.north);
+ \draw[->](d4.east) -| node[p5lbl,pos=0.2,above]{Rồi}(cout.north);
+ \draw[->](cin.south)  -- ++(0,-0.3) -| (a6.north);
+ \draw[->](cout.south) -- ++(0,-0.3) -| (a6.north);
+ \draw[->](a6)--node[p5lbl,right,pos=0.45]{Thành công}(d5);
+ \draw[->](d5)--node[p5lbl,right,pos=0.45]{Có}(end);
+
+ % ---- nhánh trái ----
+ \draw[->](d1.west)--node[p5lbl,above]{Không}(e1.east);
+ \draw[->](e1.north) |- (a2.west);
+ \draw[->](d3.west)--node[p5lbl,above]{Không}(e2.east);
+ \draw[->](e2.north) |- (a4.west);
+
+ % ---- nhánh phải ----
+ \draw[->](d2.east)--node[p5lbl,above]{Không}(a5.west);
+ \draw[->](a5.south) |- (d3.east);
+ \draw[->](a6.east)--node[p5lbl,above]{Lỗi}(e3.west);
+
+ % ---- trục quay lại bước quét (x = 7.4): chung cho "Chưa hết ca" và "Thử lại" ----
+ \draw[->](d5.east) -- node[p5lbl,above,pos=0.45]{Chưa}(7.4,-17.4)
+                    -- (7.4,-6.8) -- (a4.east);
+ \draw[-](e3.east)  -- node[p5lbl,above,pos=0.5]{Thử lại}(7.4,-15.6);
+\end{tikzpicture}
+\caption{Flow 1: người trực bắt đầu ca và ghi nhận thành viên}\label{p5:fig-flow1}
+\end{figure}
+{\small
+\noindent\textbf{Lưu ý đảo trạng thái:} hệ thống chọn check-in hay check-out theo trạng thái hiện tại của thành viên. Nếu một lượt trước bị bỏ sót, lượt sau sẽ ghi ngược; vì vậy kết quả mỗi lượt quét phải hiển thị rõ và cho phép hoàn tác ngay, và gửi lại cùng một lượt không được ghi trùng (BE-12).\\[2pt]
+\noindent\textbf{Lưu ý lỗi mạng:} nếu mất mạng khi ghi nhận, MVP không có hàng đợi offline; ứng dụng phải báo lỗi rõ ràng và cho thử lại hoặc nhập MSSV, không hiển thị như thể đã ghi nhận thành công.}
+
+\subsection{Luồng 2: Thành viên hoặc ban quản lý xem trạng thái phòng}
+\textbf{Điểm bắt đầu:} người dùng muốn biết tình hình phòng. \\
+\textbf{Kết quả mong đợi:} biết phòng đang mở hay đóng, ai đang trực, ai đang có mặt, và quyết định đến phòng hoặc liên hệ người trực. \\
+\textbf{Chức năng:} F1, F2, F7 (xem lịch ca của F2 khi phòng đóng).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>=Stealth]
+ % ---- cột chính ----
+ \node[p5st] (s)  at (0,0)     {Bắt đầu: mở ứng dụng};
+ \node[p5dc] (d0) at (0,-1.7)  {Đã đăng nhập?};
+ \node[p5act](a1) at (0,-3.4)  {Chọn phòng};
+ \node[p5act](a2) at (0,-4.5)  {Mở màn hình Trạng thái phòng};
+ \node[p5dc] (d1) at (0,-6.2)  {Tải được dữ liệu?};
+ \node[p5dc] (d2) at (0,-8.1)  {Có ca đang diễn ra?};
+ \node[p5ok,text width=3.3cm](o1) at (-3.6,-10.4) {Phòng đang mở: người trực, danh sách có mặt};
+ \node[p5ok,text width=3.3cm](o2) at (3.6,-10.4)  {Phòng đóng: ca trực kế tiếp và thay đổi lịch};
+ \node[p5st,text width=3.6cm](end) at (0,-12.6) {Quyết định: đến phòng / liên hệ người trực};
+ % ---- nhánh phụ ----
+ \node[p5bad](l)  at (-4.8,-1.7) {Đăng nhập};
+ \node[p5bad,text width=3.4cm](e1) at (5.2,-6.2) {Hiện dữ liệu lần cuối kèm giờ cập nhật, nút Tải lại};
+
+ % ---- luồng ----
+ \draw[->](s)--(d0);
+ \draw[->](d0)--node[p5lbl,right,pos=0.45]{Rồi}(a1);
+ \draw[->](d0.west)--node[p5lbl,above]{Chưa}(l.east);
+ \draw[->](l.south) |- (a1.west);
+ \draw[->](a1)--(a2);
+ \draw[->](a2)--(d1);
+ \draw[->](d1)--node[p5lbl,right,pos=0.45]{Có}(d2);
+ \draw[->](d1.east)--node[p5lbl,above]{Không}(e1.west);
+ \draw[->](e1.north) |- (a2.east);
+ \draw[->](d2.west) -| node[p5lbl,pos=0.2,above]{Có}(o1.north);
+ \draw[->](d2.east) -| node[p5lbl,pos=0.2,above]{Không}(o2.north);
+ \draw[->](o1.south) |- (end.west);
+ \draw[->](o2.south) |- (end.east);
+\end{tikzpicture}
+\caption{Flow 2: xem trạng thái phòng}\label{p5:fig-flow2}
+\end{figure}
+\noindent\textbf{Ghi chú ``liên hệ người trực'':} MVP hiển thị tên người trực; việc liên hệ (gọi, nhắn) diễn ra ngoài ứng dụng.\\[2pt]
+\noindent\textbf{Ghi chú US8:} góc nhìn tập trung dành cho ban quản lý là giả thuyết A7 cần kiểm chứng trong pilot; khảo sát chưa hỏi trực tiếp nhóm này.

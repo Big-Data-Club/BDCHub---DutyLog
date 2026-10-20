@@ -2,6 +2,10 @@
 
 DutyLog is a club room presence and duty schedule management platform developed by the BDC Dev Team. It automates student check in and check out verification using barcode scanning on mobile devices, manages duty shifts across multiple campuses, and delivers real time occupancy visibility for club leadership.
 
+## CO3043 — Assignment 1
+
+See the [Assignment 1 report](report/main.pdf), [public Wiki entry point](https://github.com/Big-Data-Club/BDCHub---DutyLog/wiki) and [submission setup guide](docs/assignment-1/README.md). Wiki page sources are maintained in `wiki/` and must be published separately to GitHub Wiki.
+
 ---
 
 ## 1. Project Overview

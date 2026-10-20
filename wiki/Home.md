@@ -1,4 +1,19 @@
-# DutyLog — Engineering Handbook
+# DutyLog — Project Entry Point
+
+## Assignment 1 — Product Discovery & Foundation
+
+**Course:** CO3043 — Mobile Application Development
+
+**Group:** L02_MƯỜI GIỜ KÉM BẢY
+
+- [Assignment 1: report, documentation, project board and research evidence](Assignment-1)
+- [GitHub Organization](https://github.com/Big-Data-Club)
+- [GitHub Repository](https://github.com/Big-Data-Club/BDCHub---DutyLog)
+- [Figma Prototype — DutyLog](https://www.figma.com/make/edHYn86d06Uh95uwZJ1Wqm/DutyLog?fullscreen=1&t=mm4kpDhtha3xpPrq-1&code-node-id=0-6)
+
+**Preparation status:** The report and Product Discovery pages are linked from Assignment 1. Public access to the project board and original research evidence still need verification; see that page for details.
+
+## Engineering Handbook
 
 > **Last reviewed:** October 13, 2026 · **Status:** Overview / partially verified against public source  
 > Examples explain engineering intent, not proof of deployed functionality. Always compare with the commit running in your environment.

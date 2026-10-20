@@ -1,0 +1,36 @@
+> Chuyển từ báo cáo Assignment 1 của nhóm; giữ các giới hạn bằng chứng và phân biệt kế hoạch với kết quả thực tế.
+> Nguồn: [03_assumptions.tex](https://github.com/Big-Data-Club/BDCHub---DutyLog/blob/main/report/sections/03_assumptions.tex) · [PDF đầy đủ](https://github.com/Big-Data-Club/BDCHub---DutyLog/blob/main/report/main.pdf).
+
+# Các giả định quan trọng
+
+## Danh sách giả định
+
+| **ID** | **Giả định** | **Vì sao quan trọng** | **Độ bất định** |
+| --- | --- | --- | --- |
+| A1 | Thành viên cần biết phòng đang mở hay đóng, ai đang có mặt hoặc ai đang trực trước khi đến hoặc sử dụng phòng. | Đây là giá trị cốt lõi của DutyLog; nếu thông tin hiện diện không phải nhu cầu thực tế, dự án cần điều chỉnh vấn đề ưu tiên hoặc nhóm người dùng. | Cao |
+| A2 | Thành viên sẵn sàng check-in và check-out mỗi lần đến phòng nếu thao tác nhanh và lợi ích đối với họ rõ ràng. | Dữ liệu hiện diện chỉ hữu ích khi được cập nhật thường xuyên; nếu người dùng không duy trì thao tác, độ tin cậy của thông tin sẽ giảm. | Cao |
+| A3 | Quét QR bằng điện thoại cá nhân là một phương thức phù hợp để ghi nhận ra vào cho phần lớn thành viên. | Phương thức ghi nhận ảnh hưởng trực tiếp đến luồng sử dụng, thiết bị cần triển khai và khả năng áp dụng trong điều kiện mạng không ổn định. | Cao |
+| A4 | Thành viên có khả năng tham gia trực phòng nếu ca trực phù hợp với thời gian biểu của họ. | Giả định này ảnh hưởng đến cách thiết kế lịch trực và tính năng đăng ký hoặc đổi ca; câu trả lời về ý định chưa bảo đảm hành vi tham gia thực tế. | Trung bình |
+| A5 | Thành viên có nhu cầu xem lịch trực, biết ai đang trực và đăng ký hoặc đổi ca trên cùng một hệ thống. | Nếu nhu cầu này đáng kể, quản lý lịch trực nên là một phần của phạm vi sản phẩm; nếu không, chức năng này có thể làm tăng độ phức tạp không cần thiết. | Trung bình |
+| A6 | Một số thành viên có thể gặp rào cản khi ghi nhận thủ công (dễ quên, vội, nhiều bước, mạng kém). | Mức độ rào cản chưa rõ vì 16/35 người trả lời cho biết thao tác không phiền; hiệu quả của thiết kế đơn giản hoặc báo lỗi cần kiểm chứng trong pilot. | Trung bình |
+| A7 | Ban quản lý CLB cần dữ liệu hiện diện tập trung để giảm công sức theo dõi và tổng hợp thủ công. | Đây là giả định về người dùng quản trị và lợi ích vận hành của sản phẩm; nếu không được xác nhận, giá trị và ưu tiên của dashboard hoặc báo cáo cần được xem xét lại. | Cao |
+
+## Giả định được chọn kiểm chứng trước
+
+Ưu tiên kiểm chứng A1: thành viên có thực sự cần biết trạng thái phòng và người đang có mặt trước khi đến hay không. Đây là giả định gắn trực tiếp với giá trị cốt lõi của DutyLog và có thể làm thay đổi đáng kể định hướng sản phẩm nếu không được xác nhận. Khảo sát ban đầu ghi nhận nhu cầu được tự báo cáo, nhưng chưa chứng minh rằng nhu cầu này đủ thường xuyên hoặc đủ quan trọng để hình thành thói quen sử dụng. Bước tiếp theo nên thử nghiệm nguyên mẫu tra cứu trạng thái phòng với cả thành viên thường sử dụng và người chưa từng sử dụng phòng, đồng thời ghi nhận nhiệm vụ họ cần hoàn thành, mức độ tin tưởng vào thông tin và những trường hợp họ vẫn phải hỏi người khác. Nếu nhu cầu tra cứu không xuất hiện trong các tình huống thực tế, nhóm cần xem xét thu hẹp hoặc điều chỉnh giá trị cốt lõi trước khi đầu tư vào các chức năng check-in/check-out.
+
+## Vì sao chọn A1 mà không phải A2 hoặc A3
+
+Nhóm cân nhắc A1, A2 và A3 vì cả ba đều có độ bất định cao và ảnh hưởng lớn.
+
+- **A2 (thành viên chịu check-in/out)** và **A3 (phương thức quét)** quyết định *cách* ghi nhận hiện diện. Chúng chỉ đáng đầu tư nếu có người thực sự cần dữ liệu hiện diện. Nếu A1 sai, kết quả của A2/A3 trở nên không còn quan trọng.
+
+- **A1** quyết định *có nên* xây dựng phần ghi nhận hiện diện hay không, nên được kiểm chứng trước. Khảo sát cho thấy hai nhóm khó khăn xuất hiện cùng nhau: lịch/ai trực (15/35) và hiện diện (13/35, gồm 9/35 từng quên báo tới hoặc rời phòng), 11 người gặp cả hai. Tuy nhiên nhu cầu biết ai đang có mặt chỉ ở mức mong muốn (16/35 chọn; 7/18 trong nhóm có lên phòng tháng qua, thấp hơn 9/18 chọn “mở hay đóng”), và gần một nửa số người có lên phòng chưa gặp vấn đề đáng kể (10/18); do đó A1 là chỗ bằng chứng chưa chắc so với mức ảnh hưởng của nó.
+
+A2 và A3 vẫn là câu hỏi mở thứ hai và thứ ba; chúng được đo bằng chính bản pilot (mục 4.5, 9) chứ không bằng khảo sát thêm.
+
+**Quyết định sản phẩm nào sẽ đổi nếu A1 sai?** Nếu ở cuối M2 giả định A1 bị thách thức (người dùng chỉ cần biết phòng mở hay đóng và ai đang trực, không cần danh sách toàn bộ người có mặt), MVP sẽ thu hẹp về F1, F2 và F7 rút gọn: chỉ hiển thị trạng thái mở/đóng theo ca trực của F2, người trực, lịch ca kế tiếp và thay đổi lịch; bỏ luồng quét từng thành viên (F3, F4, F5, F6) cho đến khi có bằng chứng mới. F7 rút gọn không cần dữ liệu người có mặt nên không phụ thuộc F3 (xem cổng quyết định G1 ở mục 12).
+
+---
+
+[Assignment 1](Assignment-1) · [Home](Home)

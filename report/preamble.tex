@@ -1,0 +1,51 @@
+%% ============================================================
+%% preamble.tex — CHỈ NGƯỜI 1 (Team Lead) ĐƯỢC SỬA
+%% Cần package/macro mới → nhắn Người 1, đừng tự thêm.
+%% ============================================================
+\usepackage[utf8]{vntex}
+\usepackage[table]{xcolor}
+\usepackage{amssymb,amsmath,array,hhline,fancyhdr,multicol,multirow}
+\usepackage{booktabs,longtable,tabularx,caption,float,enumitem}
+\usepackage{graphicx,setspace,listings,lastpage}
+\usepackage[a4paper,left=2.5cm,right=2.5cm,top=3.2cm,bottom=2.5cm,headheight=42pt]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,shapes.geometric,positioning,fit,backgrounds}
+\usepackage{hyperref}
+\hypersetup{urlcolor=blue,linkcolor=black,citecolor=black,colorlinks=true}
+
+\graphicspath{{cover/}{figures/}}
+
+%% ---------- Thông tin chung (sửa 1 chỗ, dùng mọi nơi) ----------
+\newcommand{\CourseName}{Phát triển Ứng dụng trên Thiết bị Di động (CO3043)}
+\newcommand{\ReportTitle}{DutyLog: Mobile Check-in \& Duty Tracking}
+\newcommand{\SubTitle}{Assignment 1 -- Product Discovery \& Foundation}
+% đánh dấu chỗ chưa xong
+\newcommand{\todo}[1]{\textcolor{red}{[TODO -- #1]}}
+
+%% ---------- Header / Footer ----------
+\setlength{\headheight}{42pt}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyhead[L]{
+ \begin{tabular}{rl}
+  \includegraphics[width=15mm, height=10mm]{logoBK.png} &
+  \begin{tabular}{l}
+   \textbf{\ttfamily Trường Đại Học Bách Khoa Tp.Hồ Chí Minh}\\
+   \textbf{\ttfamily Khoa Khoa Học và Kỹ Thuật Máy Tính}
+  \end{tabular}
+ \end{tabular}
+}
+\fancyfoot{}
+\fancyfoot[L]{\scriptsize \ttfamily \CourseName\ -- Assignment 1 -- DutyLog}
+\fancyfoot[R]{\scriptsize \ttfamily Trang {\thepage}/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
+
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\captionsetup{font=small}
+\renewcommand{\tabularxcolumn}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\lstset{frame=tb, aboveskip=3mm, belowskip=3mm, showstringspaces=false,
+  columns=flexible, basicstyle={\small\ttfamily}, breaklines=true,
+  breakatwhitespace=true, tabsize=3}

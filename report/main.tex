@@ -1,0 +1,32 @@
+%% ============================================================
+%% main.tex — CHỈ NGƯỜI 1 SỬA
+%% ============================================================
+\documentclass[a4paper,11pt]{article}
+\input{preamble}
+\usepackage{setspace}
+\begin{document}
+\onehalfspacing
+\pagenumbering{roman}
+\input{cover/cover}
+\pagenumbering{arabic}
+\tableofcontents
+\newpage
+
+\input{sections/01_direction}              % Người 1
+\input{sections/02_mobile_rationale}       % Người 4
+\input{sections/03_assumptions}            % Người 2
+\input{sections/04_evidence_plan}          % Người 2
+\input{sections/05_research}               % Người 3
+\input{sections/06_existing_solutions}     % Người 4
+\input{sections/07_evidence_findings}      % Người 3 (mở section 7)
+\input{sections/08_evidence_decisions}     % Người 2 (subsection của section 7)
+\input{sections/09_canvas}                 % Người 4
+\input{sections/10_mvp_impact_effort}      % Người 5
+\input{sections/11_user_stories}           % Người 5
+\input{sections/12_user_flows}             % Người 5
+\input{sections/13_plan_traceability}      % Người 1
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
