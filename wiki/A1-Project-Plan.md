@@ -8,7 +8,7 @@
 | Kho mã nguồn (DutyLog) | [Mở kho mã nguồn](https://github.com/Big-Data-Club/BDCHub---DutyLog) |
 | --- | --- |
 | GitHub Organization | [Mở tổ chức GitHub](https://github.com/Big-Data-Club) |
-| GitHub Project | [Mở GitHub Project](https://github.com/Big-Data-Club/BDCHub---DutyLog/projects/3) |
+| GitHub Project | [Mở GitHub Project](https://github.com/orgs/Big-Data-Club/projects/3) |
 | GitHub Wiki | [Mở GitHub Wiki](https://github.com/Big-Data-Club/BDCHub---DutyLog/wiki) |
 | Kế hoạch kỹ thuật | Tệp *DutyLog 2.0 Product Engineering Roadmap* |
 | Biểu mẫu/bộ câu hỏi khảo sát gốc<br>(dữ liệu thô, cần ẩn email trước khi công bố) | [Minh chứng khảo sát — cần bản ẩn danh công khai](https://github.com/Big-Data-Club/BDCHub---DutyLog/tree/main/docs/assignment-1/evidence) |

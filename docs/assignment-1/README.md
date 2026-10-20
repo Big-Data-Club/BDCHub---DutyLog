@@ -54,11 +54,11 @@ Xem diff trước khi commit: các file trùng tên trong Wiki sẽ nhận nội
 
 - [x] `report/main.pdf` tồn tại local, đọc được và có 39 trang.
 - [x] Đã chuyển 13 phần LaTeX thành 12 trang Wiki Markdown, gồm hai luồng Mermaid, và liên kết từ trang `Assignment-1`.
-- [ ] `main.pdf` đã mở được qua link công khai ở trên.
+- [x] `main.pdf` đã truy cập công khai; bản đã đăng khớp file local tại lần kiểm tra đầu tiên ngày 20/10/2026.
 - [ ] Đã đăng các trang Product Discovery lên GitHub Wiki và kiểm tra bảng, sơ đồ, nội dung trên trang công khai.
 - [ ] Đã bổ sung dữ liệu khảo sát, bảng câu hỏi và minh chứng thật trong `evidence/`, cập nhật mục lục minh chứng.
 - [ ] Mọi thành viên đã tham gia GitHub Organization; bổ sung danh sách nhóm và tài khoản GitHub từ thông tin thật.
-- [ ] Đã mở Project Board theo URL trong báo cáo, kiểm tra/cập nhật URL thực tế trong `wiki/Assignment-1.md` và `wiki/A1-Project-Plan.md`, đăng lại các trang đó, và đặt Project ở chế độ **Public** trong **Settings → Visibility**. Chưa xác minh URL `/projects/3` có hoạt động.
+- [x] Đã xác minh [DutyLog Project Board](https://github.com/orgs/Big-Data-Club/projects/3) trả về HTTP 200 khi không đăng nhập. Đã sửa URL cũ trả về 404 trong nguồn LaTeX, link PDF và các trang Wiki; cần push bản sửa nếu chưa đăng.
 - [ ] Board có công việc thật, trạng thái và người phụ trách phù hợp.
 - [ ] Link Figma Make đã thêm vào Home và Assignment 1; kiểm tra người có link xem được mà không cần tài khoản nhóm.
 - [ ] Đã cập nhật trạng thái chuẩn bị trên trang `Assignment-1` theo kết quả kiểm tra thực tế.

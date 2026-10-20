@@ -6,7 +6,7 @@
 
 **Group:** L02_MƯỜI GIỜ KÉM BẢY
 
-> **Trạng thái chuẩn bị:** Báo cáo PDF 39 trang và các trang Product Discovery được liên kết bên dưới. Cần kiểm tra quyền truy cập công khai của Project Board và bổ sung minh chứng khảo sát gốc đã ẩn thông tin cá nhân trước khi xác nhận sẵn sàng nộp.
+> **Trạng thái chuẩn bị:** Báo cáo PDF 39 trang, Wiki và Project Board đã truy cập được công khai khi kiểm tra ngày 20/10/2026. Cần bổ sung minh chứng khảo sát gốc đã ẩn thông tin cá nhân và xác nhận tài khoản GitHub của các thành viên trước khi hoàn tất kiểm tra bài nộp.
 
 ## Submission Materials
 
@@ -17,7 +17,7 @@
 | GitHub Organization | [Big-Data-Club](https://github.com/Big-Data-Club) |
 | GitHub Repository | [BDCHub---DutyLog](https://github.com/Big-Data-Club/BDCHub---DutyLog) |
 | Figma Prototype | [DutyLog trên Figma Make](https://www.figma.com/make/edHYn86d06Uh95uwZJ1Wqm/DutyLog?fullscreen=1&t=mm4kpDhtha3xpPrq-1&code-node-id=0-6) — cần kiểm tra quyền xem khi không đăng nhập |
-| GitHub Project Board | [URL trong báo cáo](https://github.com/Big-Data-Club/BDCHub---DutyLog/projects/3) — chưa xác minh truy cập công khai; cần kiểm tra/cập nhật |
+| GitHub Project Board | [DutyLog Project Board — Public](https://github.com/orgs/Big-Data-Club/projects/3) |
 | Research Evidence | [Mục lục minh chứng](https://github.com/Big-Data-Club/BDCHub---DutyLog/tree/main/docs/assignment-1/evidence) — chờ bổ sung minh chứng thật |
 
 ## Product Discovery Documentation
