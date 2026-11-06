@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/apidocs"
 	appdb "github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/db"
 	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/handler"
 	"github.com/Big-Data-Club/BDCHub-DutyLog/backend/internal/middleware"
@@ -54,6 +55,7 @@ func main() {
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := gin.Default()
+	apidocs.Register(r)
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

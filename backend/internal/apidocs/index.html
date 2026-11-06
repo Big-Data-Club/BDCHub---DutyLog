@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DutyLog API · BDC Hub</title>
+  <link rel="stylesheet" href="./swagger-ui.css">
+  <style>
+    body { margin:0; background:#fafbfc; color:#19324a; font-family:system-ui,sans-serif }
+    header { padding:20px max(20px,calc((100% - 1460px)/2)); background:#15374b; color:white }
+    header strong { font-size:22px } header p { margin:8px 0; line-height:1.6 }
+    header a { color:#b8e7ff } .swagger-ui .topbar { display:none }
+    #load-error { padding:24px; color:#9c2525 } .swagger-ui .wrapper { max-width:1460px }
+  </style>
+</head>
+<body>
+  <header><strong>DutyLog API</strong><p>Phòng CLB · Điểm danh · Ca trực · QR</p>
+    <a href="./doc.json" download="dutylog-swagger.json">Tải đặc tả JSON</a>
+    <p>Đăng nhập BDC Hub để lấy access token. Authorize: <code>Bearer &lt;access_token&gt;</code>.
+      Execute sẽ gửi yêu cầu thật. Token chỉ giữ trong phiên trang hiện tại.</p>
+  </header>
+  <div id="load-error" role="alert" hidden></div>
+  <div id="swagger-ui"></div>
+  <script src="./swagger-ui-bundle.js"></script>
+  <script>
+    (async function () {
+      try {
+        const response = await fetch('./doc.json', { cache:'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const spec = await response.json();
+        // Same-origin local and reverse-proxy URLs; never trust forwarded host headers.
+        spec.basePath = location.pathname.replace(/\/swagger\/(?:index\.html)?$/, '');
+        spec.host = location.host;
+        spec.schemes = [location.protocol.slice(0, -1)];
+        window.ui = SwaggerUIBundle({
+          spec, dom_id:'#swagger-ui', deepLinking:true, filter:true,
+          displayRequestDuration:true, docExpansion:'none', defaultModelsExpandDepth:0,
+          persistAuthorization:false, validatorUrl:null, tryItOutEnabled:false,
+          presets:[SwaggerUIBundle.presets.apis]
+        });
+      } catch (error) {
+        const element = document.getElementById('load-error');
+        element.hidden = false;
+        element.textContent = 'Không tải được tài liệu API. Vui lòng tải lại trang. ' + error.message;
+      }
+    })();
+  </script>
+</body>
+</html>

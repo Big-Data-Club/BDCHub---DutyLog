@@ -104,3 +104,29 @@ Use the Expo Go app or an iOS/Android simulator to open and test the mobile appl
 * Primary Maintainer: BDC Dev Team
 * Organization: Big Data Club
 * Ecosystem: BDC Hub Core Platform
+
+## API explorer (Swagger)
+
+After deploying the updated DutyLog backend, open
+`/dutylogapiv1/swagger/index.html` on the public application origin.
+Local backend: `http://localhost:8086/api/v1/swagger/index.html`.
+Download the contract at `./doc.json` from the Swagger directory.
+
+The UI includes endpoint filtering, request/response schemas, request examples,
+execution timings and Bearer authorization. Obtain an access token through BDC
+Hub Auth (including Google login), then enter `Bearer <access_token>` in
+**Authorize**. Token persistence is disabled; executing requests affects the
+selected server. The spec and UI assets are bundled into the Go binary, so the
+runtime needs neither a docs directory nor a public CDN.
+
+Maintain `backend/internal/apidocs/swagger.json` alongside handler changes.
+Only routes wired in `backend/cmd/server/main.go` are documented; registration
+routes currently present only as unregistered source are excluded. Tests check
+route coverage, schema references, assets and the existing Traefik rewrite.
+Legacy OptionalAuth and admin requirements are described separately in the spec.
+Run `go test ./...` and `go vet ./...` from `backend/` before deployment.
+
+The existing `rewrite-dutylog` middleware already maps the public Swagger path
+into `/api/v1/swagger/*`; no new ingress is required. Release this backend using
+the DutyLog image/deployment path in the production workflow. Source changes
+alone do not update the running server.
