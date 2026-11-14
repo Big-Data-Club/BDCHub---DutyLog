@@ -439,7 +439,7 @@ export const ScanCheckinScreen: React.FC<Props> = ({
                 style={StyleSheet.absoluteFillObject}
               />
               {/* Minimalist Corner Reticle Overlay */}
-              <View style={styles.reticleOverlay}>
+              <View style={styles.reticleOverlay} pointerEvents="none">
                 <View style={styles.reticleBox}>
                   {/* Four Corner Brackets */}
                   <View style={[styles.cornerBracket, styles.topLeft]} />

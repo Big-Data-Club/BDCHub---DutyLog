@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "DutyLog · Interactive demo",
+    "slug": "dutylog-product-demo",
+    "platforms": ["web"],
+    "web": { "bundler": "metro" },
+    "experiments": { "baseUrl": "/dutylog-demo" }
+  }
+}

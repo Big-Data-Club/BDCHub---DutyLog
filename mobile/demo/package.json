@@ -1,0 +1,6 @@
+{
+  "name": "dutylog-product-demo",
+  "private": true,
+  "version": "1.0.0",
+  "main": "index.tsx"
+}
