@@ -22,7 +22,7 @@ await mkdir(output, { recursive: true });
 // Only replace this script's generated artifact directory after a successful export.
 await rm(output, { recursive: true, force: true });
 await cp(staging, output, { recursive: true });
-const sources = ['mobile/src/screens', 'mobile/src/ui', 'mobile/demo'];
+const sources = ['mobile/src/screens', 'mobile/src/components', 'mobile/src/ui', 'mobile/demo'];
 async function fingerprint(directory) {
   const files = await readdir(path.join(root, directory), { withFileTypes: true });
   const entries = [];

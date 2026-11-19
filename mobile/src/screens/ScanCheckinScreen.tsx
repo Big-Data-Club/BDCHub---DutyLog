@@ -847,6 +847,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -858,6 +859,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   submitBtn: {
+    flexShrink: 0,
+    minHeight: 44,
     backgroundColor: "#2563EB",
     borderRadius: 10,
     paddingHorizontal: 16,

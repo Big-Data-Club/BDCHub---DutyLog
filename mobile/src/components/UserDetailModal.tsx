@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Platform,
+  useWindowDimensions,
   Image,
 } from "react-native";
 import { UserProfileDetail } from "../types";
@@ -47,6 +47,8 @@ function getRoleBadgeStyle(role?: string) {
 }
 
 export const UserDetailModal: React.FC<Props> = ({ visible, user, onClose }) => {
+  const { width } = useWindowDimensions();
+  const compact = width < 400;
   if (!user) return null;
 
   const roleStyle = getRoleBadgeStyle(user.role);
@@ -111,10 +113,10 @@ export const UserDetailModal: React.FC<Props> = ({ visible, user, onClose }) => 
             </View>
 
             <View style={styles.headerInfo}>
-              <Text style={styles.userName} numberOfLines={1}>
+              <Text style={styles.userName}>
                 {user.name}
               </Text>
-              <Text style={styles.userEmail} numberOfLines={1}>
+              <Text style={styles.userEmail}>
                 ✉ {user.email || "Chưa có email"}
               </Text>
               <View style={styles.badgeRow}>
@@ -152,46 +154,46 @@ export const UserDetailModal: React.FC<Props> = ({ visible, user, onClose }) => 
           >
             <View style={styles.grid}>
               {/* MSSV / Code */}
-              <View style={styles.gridTile}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile]}>
                 <View style={styles.tileIconBox}>
                   <Text style={styles.tileIconGlyph}>#</Text>
                 </View>
                 <View style={styles.tileMeta}>
                   <Text style={styles.tileLabel}>MSSV / MÃ SỐ</Text>
-                  <Text style={styles.tileValue} numberOfLines={1}>
+                  <Text style={styles.tileValue}>
                     {user.code || "Chưa có"}
                   </Text>
                 </View>
               </View>
 
               {/* Team */}
-              <View style={styles.gridTile}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile]}>
                 <View style={styles.tileIconBox}>
                   <Text style={styles.tileIconGlyph}>👥</Text>
                 </View>
                 <View style={styles.tileMeta}>
                   <Text style={styles.tileLabel}>TEAM</Text>
-                  <Text style={styles.tileValue} numberOfLines={1}>
+                  <Text style={styles.tileValue}>
                     {user.team || "Chưa phân team"}
                   </Text>
                 </View>
               </View>
 
               {/* Loại / Type */}
-              <View style={styles.gridTile}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile]}>
                 <View style={styles.tileIconBox}>
                   <Text style={styles.tileIconGlyph}>🎓</Text>
                 </View>
                 <View style={styles.tileMeta}>
                   <Text style={styles.tileLabel}>PHÂN LOẠI</Text>
-                  <Text style={styles.tileValue} numberOfLines={1}>
+                  <Text style={styles.tileValue}>
                     {user.type || "Thành viên"}
                   </Text>
                 </View>
               </View>
 
               {/* Điểm / Score */}
-              <View style={[styles.gridTile, styles.gridTileHighlight]}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile, styles.gridTileHighlight]}>
                 <View style={[styles.tileIconBox, styles.tileIconBoxHighlight]}>
                   <Text style={[styles.tileIconGlyph, { color: "#2563EB" }]}>★</Text>
                 </View>
@@ -204,20 +206,20 @@ export const UserDetailModal: React.FC<Props> = ({ visible, user, onClose }) => 
               </View>
 
               {/* Ngày thêm */}
-              <View style={styles.gridTile}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile]}>
                 <View style={styles.tileIconBox}>
                   <Text style={styles.tileIconGlyph}>📅</Text>
                 </View>
                 <View style={styles.tileMeta}>
                   <Text style={styles.tileLabel}>NGÀY THAM GIA</Text>
-                  <Text style={styles.tileValue} numberOfLines={1}>
+                  <Text style={styles.tileValue}>
                     {formattedDate}
                   </Text>
                 </View>
               </View>
 
               {/* Trạng thái */}
-              <View style={styles.gridTile}>
+              <View style={[styles.gridTile, !compact && styles.twoColumnTile]}>
                 <View style={styles.tileIconBox}>
                   <Text style={styles.tileIconGlyph}>⚡</Text>
                 </View>
@@ -304,6 +306,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   header: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
@@ -314,6 +317,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   avatarWrapper: {
+    flexShrink: 0,
     position: "relative",
   },
   avatarCircle: {
@@ -346,6 +350,7 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
+    minWidth: 0,
     gap: 3,
   },
   userName: {
@@ -360,6 +365,7 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 6,
     marginTop: 4,
@@ -383,19 +389,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   bodyScroll: {
+    flexShrink: 1,
+    minHeight: 0,
     maxHeight: 380,
   },
   bodyContent: {
+    width: "100%",
     padding: 16,
     gap: 12,
   },
   grid: {
+    width: "100%",
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
   gridTile: {
-    width: "48%",
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     padding: 10,
@@ -405,11 +415,13 @@ const styles = StyleSheet.create({
     borderColor: "#F1F5F9",
     gap: 8,
   },
+  twoColumnTile: { width: "48%" },
   gridTileHighlight: {
     backgroundColor: "#EFF6FF",
     borderColor: "#DBEAFE",
   },
   tileIconBox: {
+    flexShrink: 0,
     width: 32,
     height: 32,
     borderRadius: 8,
@@ -430,15 +442,16 @@ const styles = StyleSheet.create({
   },
   tileMeta: {
     flex: 1,
+    minWidth: 0,
   },
   tileLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 0.5,
   },
   tileValue: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "700",
     color: "#0F172A",
     marginTop: 1,
@@ -458,6 +471,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footer: {
+    flexShrink: 0,
     padding: 14,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
