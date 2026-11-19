@@ -39,7 +39,13 @@ function DemoApp() {
     window.parent.postMessage({ type: 'dutylog:ready' }, window.location.origin);
     return () => window.removeEventListener('message', listen);
   }, []);
-  useEffect(() => { window.parent.postMessage({ type: 'dutylog:screen', screen: route === 'APP' ? tab.toLowerCase() : route.toLowerCase() }, window.location.origin); }, [route, tab]);
+  useEffect(() => { 
+    window.parent.postMessage({ 
+      type: 'dutylog:screen', 
+      screen: route === 'APP' ? tab.toLowerCase() : route.toLowerCase() 
+    }, 
+    window.location.origin); 
+  }, [route, tab]);
   const register = () => setRoute('REGISTER');
   const qr = () => setRoute('QR');
   const picker = () => setRoute('PICKER');
