@@ -1,0 +1,17 @@
+{
+  "release": "2026-11",
+  "files": [
+    {
+      "name": "V001__dutylog_schema.sql",
+      "sha256": "72580e91948a74849e8b68a6fea796dc75c82b9f0fcf6dd884cc8a69b1f298f9"
+    },
+    {
+      "name": "V002__dutylog_revision.sql",
+      "sha256": "920e351eb392919eb963e8cd083e74e1bed5f9c6110906fabde950ade43d8f9c"
+    },
+    {
+      "name": "V003__system_user_and_deduplication.sql",
+      "sha256": "332a28a0d01a99662c4d575667386ba614c1b4278910210cf830835a98dd6718"
+    }
+  ]
+}
