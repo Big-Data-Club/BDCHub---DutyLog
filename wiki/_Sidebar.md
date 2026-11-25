@@ -1,5 +1,12 @@
 ## DutyLog Wiki
 
+**CO3043 — Assignment 2**
+- [Assignment 2 Hub & Deliverables](Assignment-2)
+- [Product Refinement & MVP Alignment](A2-Product-Refinement-and-MVP)
+- [Updated User Flows & States](A2-User-Flows-and-States)
+- [Design System & Prototype Guide](A2-Design-System-and-Prototype)
+- [Usability Testing & Iterations](A2-Usability-Testing-and-Iterations)
+
 **CO3043 — Assignment 1**
 - [Submission Materials & Product Discovery](Assignment-1)
 - [Project Direction](A1-Project-Direction)

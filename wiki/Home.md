@@ -1,5 +1,15 @@
 # DutyLog — Project Entry Point
 
+## Assignment 2 — Product Design, Prototyping, and Validation
+
+**Course:** CO3043 — Mobile Application Development · **Group:** L02_MƯỜI GIỜ KÉM BẢY
+
+- [Assignment 2 Hub: deliverables, alignment, testing & AI disclosure](Assignment-2)
+- [Figma Project & Interactive Prototype](https://www.figma.com/make/edHYn86d06Uh95uwZJ1Wqm/DutyLog?fullscreen=1&t=mm4kpDhtha3xpPrq-1&code-node-id=0-6)
+- [Behance Product Design Case Study](https://www.behance.net/gallery/258617873/DutyLog-Qun-ly-Dang-ky-ca-trc-UIUX-Design)
+- [Product Landing Page](https://bdc.hpcc.vn/projects/dutylog)
+- [GitHub Project Board — DutyLog](https://github.com/orgs/Big-Data-Club/projects/3)
+
 ## Assignment 1 — Product Discovery & Foundation
 
 **Course:** CO3043 — Mobile Application Development

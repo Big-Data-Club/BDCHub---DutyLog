@@ -1,6 +1,6 @@
 # 17 · UX Research and Interface Guidelines
 
-> **Status:** Research plan guided by the v2 prototype · **Reviewed:** October 13, 2026
+> **Status:** Engineering UX baseline · **Assignment 2 Design & Validation:** xem chi tiết tại [Assignment 2 Hub](Assignment-2), [Design System & Prototype](A2-Design-System-and-Prototype), và [Usability Testing & Iterations](A2-Usability-Testing-and-Iterations).
 
 ## Research questions
 
